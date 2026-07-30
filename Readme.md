@@ -39,16 +39,16 @@ pixi run maturin develop --uv
 ## Program description
 
 The program takes as input
-- a quantum algorithm described via its logical resource cost `(qubits, cx, ccx)` where
+- a quantum algorithm described via its "pre-layout" logical resource cost in the sense of [arXiv:2311.05801](https://arxiv.org/abs/2311.05801), i.e. `(qubits, cx, ccx)` where
 	- `qubits` is the number of logical qubits,
 	- `cx` and `ccx` are the numbers of expensive logical gates involved.
 - an "error budget" in the sense of [arXiv:2311.05801](https://arxiv.org/abs/2311.05801), which represents the maximal logical error rates allowed for the target algorithm
 
 Based on these, the purpose of the program is to predict the physical resource preparation conditions under which the target algorithm may eventually be executed on Alice & Bob’s proprietary architecture with an error rate consistent with the desired tolerance.
 
-In practice, the machine’s execution costs, particularly energy costs, will depend heavily on the choice of easily adjustable machine parameters, such as the average number of photons per cat qubit, the distance of the repetition codes used to implement error correction, and the number of magic-state factories to provide. The program is designed precisely to calculate machine parameters that significantly reduce the combined product of the costs associated with parameter choices and the physical resource costs.
+In practice, the machine’s execution costs, particularly energy costs, will depend heavily on the choice of easily adjustable machine parameters, such as the average number of photons per cat qubit, the distance of the repetition codes used to implement error correction, and the number of magic-state factories to provide. The program is precisely designed to calculate machine parameters that significantly reduce the combined product of the costs associated with parameter choices and the physical resource costs.
 
-A physical resource cost, defined here as a number of physical qubits and a computation time on an Alice&Bob quantum machine, is computed at fixed parameters with [Microsoft Azure Q# resource estimator](https://github.com/microsoft/qsharp/tree/main/resource_estimator).
+A physical resource cost, defined here as a number of physical qubits and a computation time on an Alice & Bob quantum machine, is computed at fixed parameters with Microsoft Azure Q# resource estimator.
 To do so, it uses the logical-to-physical mapping described in:
 - [arXiv:2311.05801](https://arxiv.org/abs/2311.05801) for the base Q# Resource Estimator model,
 - [arXiv:2302.06639](https://arxiv.org/abs/2302.06639) for Alice & Bob architecture parameters regarding the cat qubit (average number of photons $\alpha^2$), the repetition code (code distance), and the different choices of magic state factories allowed,
@@ -65,7 +65,7 @@ The program's output then consists of:
 	- Cat-qubit parameters (average photon number)
 - Total error rate
 
-The logical resource cost input `(qubits, cx, ccx)` can be provided in three different ways:
+The pre-layout logical resource cost input `(qubits, cx, ccx)` can be provided in three different ways:
 1. **Qualtran Bloq** (only via the python interface): Qualtran calculates `(qubits, cx, ccx)`
 2. **Q# program**: the interpreter extracts `(qubits, cx, ccx)`
 3. **Explicit resources**: you pass `(qubits, cx, ccx)` directly
@@ -85,7 +85,7 @@ Basic form is either (depending if you are still developing or if you installed 
 * `qsharp_alice_bob_resource_estimator_cli [OPTIONS] <COMMAND>`
 
 **Commands:**
-- `resources <qubits> <cx> <ccx>` — directly passes the logical resource cost.
+- `resources <qubits> <cx> <ccx>` — directly passes the pre-layout logical resource cost.
 - `file <path-to-qsharp-file>` — reads a Q# file.
 
 **Global options** (must appear before the command):
@@ -100,7 +100,7 @@ Basic form is either (depending if you are still developing or if you installed 
 - Frontier mode with a file: `cargo run -- --frontier file qsharp/Adder.qs`
 
 Two example files can be executed:
-- `cargo run --example=elliptic_log` uses as input the (logical) resources required to run the elliptic curve discrete logarithm problem with bit size 256 and window size 18, as computed in [arXiv:2302.06639](https://arxiv.org/abs/2302.06639)
+- `cargo run --example=elliptic_log` uses as input the (pre-layout logical) resources required to run the elliptic curve discrete logarithm problem with bit size 256 and window size 18, as computed in [arXiv:2302.06639](https://arxiv.org/abs/2302.06639)
 - `cargo run --example=from_qsharp` is equivalent to `cargo run -- --error-budget 0.0005 0.0005 0.0 file qsharp/Adder.qs`.
 
 ### Python Usage
