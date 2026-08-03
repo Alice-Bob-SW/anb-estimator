@@ -12,7 +12,6 @@ use crate::gates::{
     t_cnot, t_fizz, t_holo, t_z_gate,
 };
 use crate::hardware::Hardware;
-use std::ptr::NonNull;
 
 /// Default holonomic gate duration constant (`T_g2^holo`).
 pub const TG2_HOLO: f64 = 5.0;
@@ -24,91 +23,64 @@ pub const TG2_FIZZ: f64 = 2.0;
 pub const DEFAULT_MARGIN: f64 = 5.0;
 
 // ---------------------------------------------------------------------
-// Adiabatic elimination helper
-// ---------------------------------------------------------------------
-
-/// RAII guard: temporarily set `hw.k_b = margin*k2`, restore on Drop.
-///
-/// Crucially: DOES NOT borrow `&mut Hardware`, only stores a raw pointer.
-/// This avoids borrow-checker conflicts.
-pub struct AdiaKb {
-    ptr: NonNull<Hardware>,
-    old: f64,
-}
-
-impl AdiaKb {
-    /// Create new guard, modifying `hw.k_b`.
-    pub fn new(hw: &mut Hardware, k2: f64, margin: f64) -> Self {
-        // Save old value
-        let old = hw.k_b;
-
-        // Modify directly
-        hw.k_b = margin * k2;
-
-        // Store raw pointer (safe because lifetime is controlled externally)
-        Self {
-            ptr: NonNull::from(hw),
-            old,
-        }
-    }
-}
-
-impl Drop for AdiaKb {
-    fn drop(&mut self) {
-        unsafe {
-            // Restore original value
-            (*self.ptr.as_ptr()).k_b = self.old;
-        }
-    }
-}
-
-/// Convenience constructor
-#[inline]
-fn with_adia_kb(hw: &mut Hardware, k2: f64, margin: f64) -> AdiaKb {
-    AdiaKb::new(hw, k2, margin)
-}
-// ---------------------------------------------------------------------
 // Power wrappers (non-autocat)
 // ---------------------------------------------------------------------
 
 /// Stabilization-only (Id gate) power.
 pub fn power_stab(k2: f64, hw: &mut Hardware, macro_flag: bool) -> f64 {
-    let _scope = with_adia_kb(hw, k2, DEFAULT_MARGIN);
-    //assert!(hw.k_b == DEFAULT_MARGIN * k2);
+    let old_k_b = hw.k_b;
+    hw.k_b = DEFAULT_MARGIN * k2;
+
     let ed = e_d(hw, hw.alpha, k2);
     // P_Idgate = pump + buffer
-    p_pump(hw, k2, macro_flag) + p_buffer_drive(hw, ed, macro_flag)
+    let result = p_pump(hw, k2, macro_flag) + p_buffer_drive(hw, ed, macro_flag);
+
+    hw.k_b = old_k_b;
+    result
 }
 
 /// CNOT power (two-qubit gate).
 pub fn power_cnot(k2: f64, hw: &mut Hardware, macro_flag: bool) -> f64 {
-    let _scope = with_adia_kb(hw, k2, DEFAULT_MARGIN);
+    let old_k_b = hw.k_b;
+    hw.k_b = DEFAULT_MARGIN * k2;
 
     let ed = e_d(hw, hw.alpha, k2);
     let gcnot = drive_opt(hw, hw.alpha, k2, crate::gates::DriveInteraction::Cnot);
 
     // P_Cnotgate = pump + buffer + CNOT pump
-    p_pump(hw, k2, macro_flag)
+    let result = p_pump(hw, k2, macro_flag)
         + p_buffer_drive(hw, ed, macro_flag)
-        + p_cnot_pump(hw, gcnot, macro_flag)
+        + p_cnot_pump(hw, gcnot, macro_flag);
+
+    hw.k_b = old_k_b;
+    result
 }
 
 /// Zeno gate power (includes stabilization).
 pub fn power_z(k2: f64, hw: &mut Hardware, macro_flag: bool) -> f64 {
-    let _scope = with_adia_kb(hw, k2, DEFAULT_MARGIN);
+    let old_k_b = hw.k_b;
+    hw.k_b = DEFAULT_MARGIN * k2;
 
     let ed = e_d(hw, hw.alpha, k2);
     let ez = drive_opt(hw, hw.alpha, k2, crate::gates::DriveInteraction::Z);
 
-    p_pump(hw, k2, macro_flag)
+    let result = p_pump(hw, k2, macro_flag)
         + p_buffer_drive(hw, ed, macro_flag)
-        + p_zeno_drive(hw, ez, macro_flag)
+        + p_zeno_drive(hw, ez, macro_flag);
+
+    hw.k_b = old_k_b;
+    result
 }
 
 /// ATS pump power (two-photon dissipation).
 pub fn power_atspump(k2: f64, hw: &mut Hardware, macro_flag: bool) -> f64 {
-    let _scope = with_adia_kb(hw, k2, DEFAULT_MARGIN);
-    p_pump(hw, k2, macro_flag)
+    let old_k_b = hw.k_b;
+    hw.k_b = DEFAULT_MARGIN * k2;
+
+    let result = p_pump(hw, k2, macro_flag);
+
+    hw.k_b = old_k_b;
+    result
 }
 
 // ---------------------------------------------------------------------
@@ -129,7 +101,8 @@ pub fn duration_meas(k2: f64, ez: f64, hw: &Hardware) -> [f64; 4] {
 /// Total durations for one repetition-code cycle:
 /// `[T_prep, T_CNOT, T_meas, T_cycle]`
 pub fn duration_cycle(k2: f64, hw: &mut Hardware) -> [f64; 4] {
-    let _scope = with_adia_kb(hw, k2, DEFAULT_MARGIN);
+    let old_k_b = hw.k_b;
+    hw.k_b = DEFAULT_MARGIN * k2;
 
     let ez = drive_opt(hw, hw.alpha, k2, crate::gates::DriveInteraction::Z);
     let gcnot = drive_opt(hw, hw.alpha, k2, crate::gates::DriveInteraction::Cnot);
@@ -139,6 +112,7 @@ pub fn duration_cycle(k2: f64, hw: &mut Hardware) -> [f64; 4] {
     let t_cnot = t_cnot(hw.alpha, gcnot);
     let t_cycle = t_prep + 2.0 * t_cnot + t_meas;
 
+    hw.k_b = old_k_b;
     [t_prep, t_cnot, t_meas, t_cycle]
 }
 
@@ -149,7 +123,8 @@ pub fn duration_cycle(k2: f64, hw: &mut Hardware) -> [f64; 4] {
 /// Energies of the measurement substeps: `[E_halfZ, E_holo, E_FIZZ]`
 pub fn e_meas(k2: f64, hw: &mut Hardware, macro_flag: bool) -> [f64; 4] {
     // Baseline regime: adiabatic elimination k_b = margin * k2
-    let _scope = with_adia_kb(hw, k2, DEFAULT_MARGIN);
+    let old_k_b = hw.k_b;
+    hw.k_b = DEFAULT_MARGIN * k2;
 
     // Drives/energies (computed with adiabatic k_b, matching Python)
     let ed = e_d(hw, hw.alpha, k2);
@@ -173,6 +148,7 @@ pub fn e_meas(k2: f64, hw: &mut Hardware, macro_flag: bool) -> [f64; 4] {
     // Durations (same as before)
     let [t_half_z, t_h, t_f, t_restab] = duration_meas(k2, ez, hw);
 
+    hw.k_b = old_k_b;
     [
         p_half_z * t_half_z,
         p_holo * t_h,
@@ -183,11 +159,14 @@ pub fn e_meas(k2: f64, hw: &mut Hardware, macro_flag: bool) -> [f64; 4] {
 
 /// Energy of one CNOT gate.
 pub fn e_cnot(k2: f64, hw: &mut Hardware, macro_flag: bool) -> f64 {
-    let _scope = with_adia_kb(hw, k2, DEFAULT_MARGIN);
+    let old_k_b = hw.k_b;
+    hw.k_b = DEFAULT_MARGIN * k2;
 
     let gcnot = drive_opt(hw, hw.alpha, k2, crate::gates::DriveInteraction::Cnot);
     let p = power_cnot(k2, hw, macro_flag);
     let t = t_cnot(hw.alpha, gcnot);
+
+    hw.k_b = old_k_b;
     p * t
 }
 

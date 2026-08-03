@@ -219,6 +219,8 @@ impl AliceAndBobEstimates {
         clippy::cast_sign_loss
     )]
     pub fn total_energy_joules_factories(&self, macro_flag: bool) -> f64 {
+        // FXIME?: factories use the default k1/k2 (1e-5), not the
+        // code's optimized one. The factory tables were precomputed at 1e-5.
         let k1_on_k2 = CatQubit::new().k1_k2;
 
         // Factory code parameters (distance, |α|²)

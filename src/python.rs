@@ -120,36 +120,16 @@ impl FullResults {
 /// - `k1_k2_values`: explicit list of values (optimized over)
 ///
 /// If none are provided, we keep the repetition code default (Fixed(1e-5)).
+///
+/// Thin Python-error-mapping wrapper around [`RepetitionCode::configure_k1_k2`],
+/// shared with the CLI in `main.rs`.
 fn configure_k1_k2(
     qec: &mut RepetitionCode,
     k1_k2: Option<f64>,
     k1_k2_values: Option<Vec<f64>>,
 ) -> PyResult<()> {
-    match (k1_k2, k1_k2_values) {
-        (None, None) => Ok(()),
-        (Some(k), None) => {
-            if !(k.is_finite() && k > 0.0) {
-                return Err(PyValueError::new_err("k1_k2 must be finite and > 0"));
-            }
-            qec.set_k1_k2(k);
-            Ok(())
-        }
-        (None, Some(values)) => {
-            if values.is_empty() {
-                return Err(PyValueError::new_err("k1_k2_values must be non-empty"));
-            }
-            if !values.iter().all(|&k| k.is_finite() && k > 0.0) {
-                return Err(PyValueError::new_err(
-                    "all k1_k2_values must be finite and > 0",
-                ));
-            }
-            qec.set_k1_k2_values(values);
-            Ok(())
-        }
-        (Some(_), Some(_)) => Err(PyValueError::new_err(
-            "Provide at most one of: k1_k2, k1_k2_values",
-        )),
-    }
+    qec.configure_k1_k2(k1_k2, k1_k2_values)
+        .map_err(PyValueError::new_err)
 }
 
 /// Estimate resources from a Q# file and return both the best estimate and, optionally,

@@ -78,22 +78,52 @@ impl RepetitionCode {
     }
 
     /// Option 2: user provides a single κ₁/κ₂ value -> fixed, not optimized over.
-    pub fn set_k1_k2(&mut self, k1_k2: f64) {
-        assert!(
-            k1_k2.is_finite() && k1_k2 > 0.0,
-            "κ₁/κ₂ must be finite and > 0"
-        );
+    ///
+    /// # Errors
+    /// Returns an error if `k1_k2` is not finite and > 0.
+    pub fn set_k1_k2(&mut self, k1_k2: f64) -> Result<(), String> {
+        if !(k1_k2.is_finite() && k1_k2 > 0.0) {
+            return Err("κ₁/κ₂ must be finite and > 0".to_string());
+        }
         self.k1_k2_spec = K1K2Spec::Fixed(k1_k2);
+        Ok(())
     }
 
     /// Option 3: explicit κ₁/κ₂ values (optimized over).
-    pub fn set_k1_k2_values(&mut self, values: Vec<f64>) {
-        assert!(!values.is_empty(), "κ₁/κ₂ values must not be empty");
-        assert!(
-            values.iter().all(|&k| k.is_finite() && k > 0.0),
-            "all κ₁/κ₂ values must be finite and > 0"
-        );
+    ///
+    /// # Errors
+    /// Returns an error if `values` is empty, or any entry is not finite and > 0.
+    pub fn set_k1_k2_values(&mut self, values: Vec<f64>) -> Result<(), String> {
+        if values.is_empty() {
+            return Err("κ₁/κ₂ values must not be empty".to_string());
+        }
+        if !values.iter().all(|&k| k.is_finite() && k > 0.0) {
+            return Err("all κ₁/κ₂ values must be finite and > 0".to_string());
+        }
         self.k1_k2_spec = K1K2Spec::Values(values);
+        Ok(())
+    }
+
+    /// Apply optional κ₁/κ₂ configuration: at most one of a fixed value or an
+    /// explicit list of values to optimize over. Leaves the default (`Fixed(1e-5)`)
+    /// in place if neither is provided.
+    ///
+    /// Shared by the CLI and the Python bindings so both accept the same inputs.
+    ///
+    /// # Errors
+    /// Returns an error if both `k1_k2` and `k1_k2_values` are provided, or if
+    /// either fails the validation in [`Self::set_k1_k2`] / [`Self::set_k1_k2_values`].
+    pub fn configure_k1_k2(
+        &mut self,
+        k1_k2: Option<f64>,
+        k1_k2_values: Option<Vec<f64>>,
+    ) -> Result<(), String> {
+        match (k1_k2, k1_k2_values) {
+            (None, None) => Ok(()),
+            (Some(k), None) => self.set_k1_k2(k),
+            (None, Some(values)) => self.set_k1_k2_values(values),
+            (Some(_), Some(_)) => Err("Provide at most one of: k1_k2, k1_k2_values".to_string()),
+        }
     }
 
     #[must_use]
@@ -221,7 +251,7 @@ struct CodeParameterRange {
 impl CodeParameterRange {
     #[allow(clippy::cast_possible_truncation)]
     pub fn new(
-        _lower_bound: Option<&CodeParameter>,
+        lower_bound: Option<&CodeParameter>,
         max_distance: u64,
         max_alpha_sq: f64,
         k1_k2_spec: K1K2Spec,
@@ -245,11 +275,33 @@ impl CodeParameterRange {
             }
         };
 
+        // Resume from a previously found parameter instead of rescanning the
+        // whole grid from scratch: callers (e.g. frontier building) pass in
+        // the smallest parameter known to already satisfy the logical error
+        // rate, and only want to search from there onward.
+        let (distance, alpha_sq, k_index) = match lower_bound {
+            Some(bound) => {
+                let k_index = match &k1_k2_spec {
+                    K1K2Spec::Fixed(_) => 0,
+                    K1K2Spec::Values(values) => values
+                        .iter()
+                        .position(|&k| (k - bound.k1_k2).abs() < f64::EPSILON)
+                        .unwrap_or(0) as u32,
+                };
+                let alpha_sq = bound
+                    .alpha_sq
+                    .to_u64()
+                    .expect("alpha_sq failed to be represented as u64");
+                (bound.distance, alpha_sq, k_index)
+            }
+            None => (1, 1, 0),
+        };
+
         Self {
-            distance: 1,
-            alpha_sq: 1,
+            distance,
+            alpha_sq,
             k1_k2_spec,
-            k_index: 0,
+            k_index,
             k_count,
             max_distance,
             max_alpha_sq,
