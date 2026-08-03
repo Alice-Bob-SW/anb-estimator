@@ -4,6 +4,7 @@
 //! ! It leverages PyO3 to create Python-callable functions and classes.
 
 use num_traits::FromPrimitive;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*; // brings Python, PyResult, PyModule, Bound, etc.
 use std::rc::Rc;
 
@@ -112,6 +113,45 @@ impl FullResults {
     }
 }
 
+/// Apply optional κ₁/κ₂ configuration to a repetition code.
+///
+/// Exactly one of these may be provided:
+/// - `k1_k2`: fixed single value (NOT optimized)
+/// - `k1_k2_values`: explicit list of values (optimized over)
+///
+/// If none are provided, we keep the repetition code default (Fixed(1e-5)).
+fn configure_k1_k2(
+    qec: &mut RepetitionCode,
+    k1_k2: Option<f64>,
+    k1_k2_values: Option<Vec<f64>>,
+) -> PyResult<()> {
+    match (k1_k2, k1_k2_values) {
+        (None, None) => Ok(()),
+        (Some(k), None) => {
+            if !(k.is_finite() && k > 0.0) {
+                return Err(PyValueError::new_err("k1_k2 must be finite and > 0"));
+            }
+            qec.set_k1_k2(k);
+            Ok(())
+        }
+        (None, Some(values)) => {
+            if values.is_empty() {
+                return Err(PyValueError::new_err("k1_k2_values must be non-empty"));
+            }
+            if !values.iter().all(|&k| k.is_finite() && k > 0.0) {
+                return Err(PyValueError::new_err(
+                    "all k1_k2_values must be finite and > 0",
+                ));
+            }
+            qec.set_k1_k2_values(values);
+            Ok(())
+        }
+        (Some(_), Some(_)) => Err(PyValueError::new_err(
+            "Provide at most one of: k1_k2, k1_k2_values",
+        )),
+    }
+}
+
 /// Estimate resources from a Q# file and return both the best estimate and, optionally,
 /// a frontier of Pareto-optimal trade-offs, together with the parsed logical counts.
 ///
@@ -120,21 +160,45 @@ impl FullResults {
 /// - `frontier` — If `true`, also compute a frontier of estimates (e.g., different distances/α).
 /// - `error_total` — argument of make_budget ; mutually exclusive with `error_budget`.
 /// - `error_budget` — argument of make_budget ; mutually exclusive with `error_total`.
+/// - `optimize_for_energy` — If `true`, optimize the code parameters for total energy
+///   consumption instead of physical qubit count.
+/// - `k1_k2` — Optional fixed κ₁/κ₂ ratio (NOT optimized); mutually exclusive with `k1_k2_values`.
+/// - `k1_k2_values` — Optional list of κ₁/κ₂ ratios to optimize over; mutually exclusive with `k1_k2`.
 ///
 /// # Errors
 /// - I/O or parsing failures when loading the Q# file,
 /// - Failures during resource estimation.
 ///
 #[pyfunction]
+#[pyo3(
+    signature = (
+        filename,
+        frontier,
+        error_total=None,
+        error_budget=None,
+        optimize_for_energy=false,
+        k1_k2=None,
+        k1_k2_values=None,
+    )
+)]
 fn _estimate_qsharp_file(
     filename: &str,
     frontier: bool,
     error_total: Option<f64>,
     error_budget: Option<(f64, f64, f64)>,
+    optimize_for_energy: bool,
+    k1_k2: Option<f64>,
+    k1_k2_values: Option<Vec<f64>>,
 ) -> PyResult<FullResults> {
     // Build the estimation
     let qubit = CatQubit::new();
-    let qec = RepetitionCode::new();
+    let mut qec = if optimize_for_energy {
+        RepetitionCode::new_energy_optimized()
+    } else {
+        RepetitionCode::new_qubit_optimized()
+    };
+    configure_k1_k2(&mut qec, k1_k2, k1_k2_values)?;
+
     let builder = ToffoliBuilder::default();
     let budget = make_budget(error_total, error_budget)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
@@ -195,10 +259,27 @@ fn _estimate_qsharp_file(
 /// - `frontier` — If `true`, compute and return the frontier as structured objects.
 /// - `error_total` — argument of make_budget ; mutually exclusive with `error_budget`.
 /// - `error_budget` — argument of make_budget ; mutually exclusive with `error_total`.
+/// - `optimize_for_energy` — If `true`, optimize the code parameters for total energy
+///   consumption instead of physical qubit count.
+/// - `k1_k2` — Optional fixed κ₁/κ₂ ratio (NOT optimized); mutually exclusive with `k1_k2_values`.
+/// - `k1_k2_values` — Optional list of κ₁/κ₂ ratios to optimize over; mutually exclusive with `k1_k2`.
 ///
 /// # Errors
 /// Propagates errors from the physical resource estimator.
 #[pyfunction]
+#[pyo3(
+    signature = (
+        qubits,
+        cx,
+        ccx,
+        frontier,
+        error_total=None,
+        error_budget=None,
+        optimize_for_energy=false,
+        k1_k2=None,
+        k1_k2_values=None,
+    )
+)]
 fn _estimate_logical_counts(
     // TODO: remove duplication between here and main.rs.
     qubits: u64,
@@ -207,10 +288,19 @@ fn _estimate_logical_counts(
     frontier: bool,
     error_total: Option<f64>,
     error_budget: Option<(f64, f64, f64)>,
+    optimize_for_energy: bool,
+    k1_k2: Option<f64>,
+    k1_k2_values: Option<Vec<f64>>,
 ) -> PyResult<FullResults> {
     // Build the estimation
     let qubit = CatQubit::new();
-    let qec = RepetitionCode::new();
+    let mut qec = if optimize_for_energy {
+        RepetitionCode::new_energy_optimized()
+    } else {
+        RepetitionCode::new_qubit_optimized()
+    };
+    configure_k1_k2(&mut qec, k1_k2, k1_k2_values)?;
+
     let builder = ToffoliBuilder::default();
     let budget = make_budget(error_total, error_budget)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
@@ -251,6 +341,33 @@ fn _estimate_logical_counts(
     })
 }
 
+/// Estimate resources for the built-in elliptic-curve discrete log example.
+///
+/// # Arguments
+/// - `bit_size` — ECC modulus bit size.
+/// - `window_size` — Window size used by the example algorithm.
+/// - `frontier` — If `true`, also return a list representing the frontier.
+///
+/// # Errors
+/// Propagates example execution or estimation errors as Python `RuntimeError`s.
+#[pyfunction]
+fn _estimate_ecc_example(bit_size: u64, window_size: u64, frontier: bool) -> PyResult<FullResults> {
+    let (single_est, frontier_est, counts) =
+        crate::ecc_example::run_ecc_example_struct(bit_size, window_size, frontier)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+    let counts_py = LogicalCounts::from(&counts);
+    let single_report = EstimatesReport::from(&single_est);
+    let frontier_report =
+        frontier.then(|| frontier_est.iter().map(EstimatesReport::from).collect());
+
+    Ok(FullResults {
+        estimates: single_report,
+        frontier: frontier_report,
+        counts: counts_py,
+    })
+}
+
 #[pymethods]
 impl EstimatesReport {
     fn __repr__(&self) -> String {
@@ -276,11 +393,12 @@ fn _cli_main(args: Vec<String>) -> PyResult<()> {
 /// Python module entry point for the Alice & Bob Q# resource estimator bindings.
 ///
 /// Registers user-facing functions that load Q# programs, accept explicit logical counts,
-/// in both pretty-printed and structured forms.
+/// and run the built-in ECC example, in both pretty-printed and structured forms.
 ///
 /// # Exposed callables
 /// - `_estimate_qsharp_file(...)`
 /// - `_estimate_logical_counts(...)`
+/// - `_estimate_ecc_example(...)`
 /// - `_cli_main()`
 ///
 /// # Errors
@@ -291,6 +409,7 @@ fn anb_estimator(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // functions
     m.add_function(wrap_pyfunction!(_estimate_qsharp_file, m)?)?;
     m.add_function(wrap_pyfunction!(_estimate_logical_counts, m)?)?;
+    m.add_function(wrap_pyfunction!(_estimate_ecc_example, m)?)?;
     m.add_function(wrap_pyfunction!(_cli_main, m)?)?;
 
     // classes

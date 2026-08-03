@@ -55,8 +55,12 @@ pub use qubit::CatQubit;
 
 pub mod code;
 pub mod counter;
+pub mod ecc_example;
 pub mod estimates;
 pub mod factories;
+pub mod gates;
+pub mod hardware;
+pub mod logical_utils;
 pub mod qubit;
 
 #[cfg(feature = "cli")]

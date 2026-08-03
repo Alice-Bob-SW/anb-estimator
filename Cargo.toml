@@ -36,7 +36,7 @@ num-traits = "0.2.19"
 qsc = { git = "https://github.com/microsoft/qdk.git", tag = "v1.32.0" }
 resource_estimator = { git = "https://github.com/microsoft/qdk.git", tag = "v1.32.0" }
 num-format = "0.4.4"
-
+statrs = "0.18.0"
 
 [lints.clippy]
 mod_module_files = "warn"

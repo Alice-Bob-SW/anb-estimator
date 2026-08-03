@@ -31,21 +31,27 @@ This installs the `anb-estimator` CLI and the `anb_estimator` library. No Rust t
 - `--json <file>`: also write the computed estimate(s) as JSON to `<file>` (a single object, or an array with `--frontier`).
 - `--error-budget <topological> <magic> <rotation>`: detailed error split into 3 components.
 - `--error-total <value>`: overall error budget, equivalent to `--error-budget <value>/2 <value>/2 0`. Default `0.333`.
+- `--optimize-for-energy`: optimize the code parameters for total energy consumption instead of physical qubit count.
+- `--k1-k2 <value>`: fixed κ₁/κ₂ ratio to use (not optimized over). Default `1e-5`.
+- `--k1-k2-values <v1,v2,...>`: comma-separated list of κ₁/κ₂ ratios to optimize over.
 
-Use either `--error-total` or `--error-budget`, not both.
+Use either `--error-total` or `--error-budget`, not both. Same for `--k1-k2` and `--k1-k2-values`.
 
 **Examples:**
 - `anb-estimator resources 40 10 10`
 - `anb-estimator --frontier file qsharp/Adder.qs`
 - `anb-estimator --json estimate.json resources 40 10 10`
+- `anb-estimator --optimize-for-energy --k1-k2-values 1e-6,1e-5,1e-4 resources 40 10 10`
 
 ### Library
 
 ```python
-from anb_estimator import estimate_logical_counts, estimate_qsharp_file, estimate_from_qualtran
+from anb_estimator import estimate_logical_counts, estimate_qsharp_file, estimate_from_qualtran, estimate_ecc_example
 ```
 
-`estimate_from_qualtran` takes a Qualtran `Bloq`, `estimate_qsharp_file` a Q# file, and `estimate_logical_counts` explicit `(qubits, cx, ccx)`. See [Program description](#program-description) for details on these three input forms.
+`estimate_from_qualtran` takes a Qualtran `Bloq`, `estimate_qsharp_file` a Q# file, and `estimate_logical_counts` explicit `(qubits, cx, ccx)`. `estimate_ecc_example` runs a built-in elliptic-curve discrete log example, given only `(bit_size, window_size)`. See [Program description](#program-description) for details on these input forms.
+
+Every function also accepts `optimize_for_energy` (search code parameters that minimize total energy instead of physical qubit count) and either a fixed `k1_k2` ratio or a `k1_k2_values` list to optimize over.
 
 ## Rust crate
 
@@ -77,23 +83,24 @@ The program takes as input
 
 Based on these, the purpose of the program is to predict the physical resource preparation conditions under which the target algorithm may eventually be executed on Alice & Bob’s proprietary architecture with an error rate consistent with the desired tolerance.
 
-In practice, the machine’s execution costs, particularly energy costs, will depend heavily on the choice of easily adjustable machine parameters, such as the average number of photons per cat qubit, the distance of the repetition codes used to implement error correction, and the number of magic-state factories to provide. The program is precisely designed to calculate machine parameters that significantly reduce the combined product of the costs associated with parameter choices and the physical resource costs.
+In practice, the machine’s execution costs, particularly energy costs, will depend heavily on the choice of easily adjustable machine parameters, such as the average number of photons per cat qubit, the distance of the repetition codes used to implement error correction, the ratio κ₁/κ₂, and the number of magic-state factories to provide. The program is precisely designed to calculate machine parameters that significantly reduce the combined product of the costs associated with parameter choices and the physical resource costs. Depending on the use case, this search can be driven either by physical qubit count or by total energy consumption (see `optimize_for_energy` in the [Library](#library) section).
 
 A physical resource cost, defined here as a number of physical qubits and a computation time on an Alice & Bob quantum machine, is computed at fixed parameters with Microsoft Azure Q# resource estimator.
 To do so, it uses the logical-to-physical mapping described in:
 - [arXiv:2311.05801](https://arxiv.org/abs/2311.05801) for the base Q# Resource Estimator model,
-- [arXiv:2302.06639](https://arxiv.org/abs/2302.06639) for Alice & Bob architecture parameters regarding the cat qubit (average number of photons $\alpha^2$), the repetition code (code distance), and the different choices of magic state factories allowed,
+- [arXiv:2302.06639](https://arxiv.org/abs/2302.06639) for Alice & Bob architecture parameters regarding the cat qubit (average number of photons $\alpha^2$), the repetition code (code distance, κ₁/κ₂), and the different choices of magic state factories allowed,
 - the function `logical_depth` from `src/counter.rs` for the logical_depths attributed to `cx` and `ccx` gates in the sense of [arXiv:2311.05801](https://arxiv.org/abs/2311.05801), i.e. how many logical cycles are necessary for their executions.
 
 The program's output then consists of:
 - Resources:
 	- Total number of physical qubits
 	- Runtime estimates
+	- Total energy consumption
 	- Number of magic state factories
 	- Percentage of physical qubits involved in magic state production
 - Physical parameters (data qubits and magic state factories are considered separately):
 	- Code distance
-	- Cat-qubit parameters (average photon number)
+	- Cat-qubit parameters (average photon number, κ₁/κ₂)
 - Total error rate
 
 The pre-layout logical resource cost input `(qubits, cx, ccx)` can be provided in three different ways:
