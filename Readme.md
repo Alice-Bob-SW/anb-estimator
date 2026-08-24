@@ -90,6 +90,7 @@ Basic form is either (depending if you are still developing or if you installed 
 
 **Global options** (must appear before the command):
 - `-f` or `--frontier` — prints a frontier of good parameter sets instead of a single estimate.
+- `--json <file>` — also writes the computed estimate(s) as JSON to `<file>` (a single object, or an array when combined with `--frontier`).
 - `--error-budget <topological> <magic> <rotation>` — detailed split into 3 components.
 - `--error-total <value>` — overall error budget. Equivalent to using `--error-budget <value>/2 <value>/2 0`. Default value is `<value> = 0.333`.
 
@@ -98,6 +99,7 @@ Basic form is either (depending if you are still developing or if you installed 
 **Examples:**
 - From explicit resources: `cargo run -- resources 40 10 10`
 - Frontier mode with a file: `cargo run -- --frontier file qsharp/Adder.qs`
+- Writing the estimate to a JSON file: `cargo run -- --json estimate.json resources 40 10 10`
 
 Two example files can be executed:
 - `cargo run --example=elliptic_log` uses as input the (pre-layout logical) resources required to run the elliptic curve discrete logarithm problem with bit size 256 and window size 18, as computed in [arXiv:2302.06639](https://arxiv.org/abs/2302.06639)

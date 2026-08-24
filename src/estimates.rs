@@ -3,9 +3,15 @@
 
 //! Convenience structure to display resource estimation results.
 
-use std::{fmt::Display, ops::Deref};
+#[cfg(any(feature = "cli", feature = "python"))]
+use std::fmt::Display;
+use std::ops::Deref;
 
-use num_traits::{FromPrimitive, ToPrimitive};
+#[cfg(any(feature = "cli", feature = "python"))]
+use num_traits::FromPrimitive;
+use num_traits::ToPrimitive;
+#[cfg(feature = "python")]
+use pyo3::pyclass;
 use resource_estimator::estimates::{
     ErrorBudget, FactoryPart, Overhead, PhysicalResourceEstimationResult,
 };
@@ -88,37 +94,89 @@ impl From<PhysicalResourceEstimationResult<RepetitionCode, ToffoliFactory, Logic
     }
 }
 
-impl Display for AliceAndBobEstimates {
+/// Plain snapshot of an [`AliceAndBobEstimates`], shared by the CLI's JSON/text
+/// output and the Python bindings.
+#[cfg(any(feature = "cli", feature = "python"))]
+#[cfg_attr(feature = "python", pyclass(frozen, get_all))]
+#[cfg_attr(feature = "cli", derive(serde::Serialize))]
+#[derive(Clone)]
+pub struct EstimatesReport {
+    /// Number of physical qubits, routing qubits included.
+    pub physical_qubits: u64,
+    /// Runtime, in seconds.
+    pub runtime_seconds: f64,
+    /// Runtime, in hours.
+    pub runtime_hours: f64,
+    /// Total error probability of the computation.
+    pub total_error: f64,
+
+    /// Code distance of the logical patch.
+    pub code_distance: u64,
+    /// Average number of photons |α|² in each cat qubit of the logical patch.
+    pub code_alpha2: f64,
+
+    /// Number of Toffoli factory copies.
+    pub factories: u64,
+    /// Code distance used inside the Toffoli factories.
+    pub factories_distance: u64,
+    /// Average number of photons |α|² in each cat qubit used in factories.
+    pub factories_alpha2: f64,
+
+    /// Fraction of physical qubits allocated to the Toffoli factories, in percent.
+    pub factory_fraction_percent: f64,
+    /// Fraction of physical qubits allocated to the Toffoli factories, in \[0, 1\].
+    pub factory_fraction: f64,
+}
+
+#[cfg(any(feature = "cli", feature = "python"))]
+impl From<&AliceAndBobEstimates> for EstimatesReport {
+    fn from(e: &AliceAndBobEstimates) -> Self {
+        let code_parameter = e.logical_patch().code_parameter();
+        let factory_part = e.toffoli_factory_part().expect("No factory part");
+        let factory = factory_part.factory();
+
+        Self {
+            physical_qubits: e.physical_qubits(),
+            runtime_seconds: f64::from_u64(e.runtime()).expect("runtime is too large") / 1e9,
+            runtime_hours: f64::from_u64(e.runtime()).expect("runtime is too large") / 1e9 / 3600.0,
+            total_error: e.total_error(),
+            code_distance: code_parameter.distance,
+            code_alpha2: code_parameter.alpha_sq,
+            factories: factory_part.copies(),
+            factories_distance: factory.code_parameter.distance,
+            factories_alpha2: factory.code_parameter.alpha_sq,
+            factory_fraction_percent: e.factory_fraction(),
+            factory_fraction: e.factory_fraction() / 100.0,
+        }
+    }
+}
+
+#[cfg(any(feature = "cli", feature = "python"))]
+impl Display for EstimatesReport {
     /// Print the final estimates.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
         writeln!(f, "─────────────────────────────")?;
-        writeln!(f, "# physical qubits:    {}", self.physical_qubits())?;
-        writeln!(
-            f,
-            "runtime:             {:.2} hrs",
-            f64::from_u64(self.runtime()).expect("runtime is too large") / 1e9 / 3600.0
-        )?;
-        writeln!(f, "total error:         {:.5}", self.total_error())?;
+        writeln!(f, "# physical qubits:    {}", self.physical_qubits)?;
+        writeln!(f, "runtime:             {:.2} hrs", self.runtime_hours)?;
+        writeln!(f, "total error:         {:.5}", self.total_error)?;
         writeln!(f, "─────────────────────────────")?;
         writeln!(
             f,
-            "code distance:       {}",
-            self.logical_patch().code_parameter()
+            "code distance:       {} (|ɑ|² = {})",
+            self.code_distance, self.code_alpha2
+        )?;
+        writeln!(f, "#factories:          {}", self.factories)?;
+        writeln!(
+            f,
+            "factories distance:  {} (|ɑ|² = {})",
+            self.factories_distance, self.factories_alpha2
         )?;
         writeln!(
             f,
-            "#factories:          {}",
-            self.toffoli_factory_part().map_or(0, FactoryPart::copies)
+            "factory fraction:    {:.2}%",
+            self.factory_fraction_percent
         )?;
-        writeln!(
-            f,
-            "factories distance:  {}",
-            self.toffoli_factory_part()
-                .expect("No factory part")
-                .factory()
-        )?;
-        writeln!(f, "factory fraction:    {:.2}%", self.factory_fraction())?;
         writeln!(f, "─────────────────────────────")
     }
 }
