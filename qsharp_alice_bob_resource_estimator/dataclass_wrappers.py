@@ -1,8 +1,11 @@
-from dataclasses import dataclass, asdict
-from typing import NamedTuple
+import json
+from dataclasses import asdict, dataclass
+from typing import Any, NamedTuple
 
-
-from qsharp_alice_bob_resource_estimator._native import LogicalCountsPy, EstimatesPy  # type: ignore[import-untyped]
+from qsharp_alice_bob_resource_estimator._native import (  # type: ignore[import-untyped]
+    EstimatesReport,
+    LogicalCountsPy,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +42,7 @@ class Estimates:
     factory_fraction: float
 
     @classmethod
-    def from_rust(cls, inner: EstimatesPy) -> "Estimates":
+    def from_rust(cls, inner: EstimatesReport) -> "Estimates":
         return cls(
             physical_qubits=inner.physical_qubits,
             runtime_seconds=inner.runtime_seconds,
@@ -63,6 +66,12 @@ class FullResults:
     estimates: Estimates
     frontier: list[Estimates] | None
     counts: LogicalCounts
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def to_json(self, **kwargs: Any) -> str:
+        return json.dumps(self.as_dict(), **kwargs)
 
 
 class ErrorBudget(NamedTuple):

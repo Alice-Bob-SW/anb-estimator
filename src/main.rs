@@ -6,11 +6,12 @@
 //! use it with subcommand `help` to learn its usage.
 
 use clap::{Args, Parser, Subcommand};
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use qsharp_alice_bob_resource_estimator::estimates::make_budget;
 use qsharp_alice_bob_resource_estimator::{
-    AliceAndBobEstimates, CatQubit, LogicalCounts, RepetitionCode, ToffoliBuilder,
+    AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts, RepetitionCode, ToffoliBuilder,
 };
 use resource_estimator::estimates::PhysicalResourceEstimation;
 
@@ -21,6 +22,10 @@ struct Cli {
     /// Show the frontier of good parameter sets instead of a single result.
     #[arg(short, long)]
     frontier: bool,
+
+    /// Also write the computed estimate(s) as JSON to this file.
+    #[arg(long, value_name = "FILE")]
+    json: Option<PathBuf>,
 
     #[command(flatten)]
     budget: Budget,
@@ -82,13 +87,24 @@ fn main() -> Result<(), anyhow::Error> {
         PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(count), budget);
 
     if args.frontier {
-        let results = estimation.build_frontier()?;
-        for r in results {
-            println!("{}", AliceAndBobEstimates::from(r));
+        let reports: Vec<EstimatesReport> = estimation
+            .build_frontier()?
+            .into_iter()
+            .map(|r| EstimatesReport::from(&AliceAndBobEstimates::from(r)))
+            .collect();
+        for r in &reports {
+            println!("{r}");
+        }
+        if let Some(path) = args.json {
+            std::fs::write(path, serde_json::to_string_pretty(&reports)?)?;
         }
     } else {
         let result: AliceAndBobEstimates = estimation.estimate()?.into();
-        println!("{result}");
+        let report = EstimatesReport::from(&result);
+        println!("{report}");
+        if let Some(path) = args.json {
+            std::fs::write(path, serde_json::to_string_pretty(&report)?)?;
+        }
     }
 
     Ok(())

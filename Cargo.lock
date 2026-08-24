@@ -898,6 +898,8 @@ dependencies = [
  "pyo3",
  "qsc",
  "resource_estimator",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

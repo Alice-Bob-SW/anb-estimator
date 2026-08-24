@@ -52,6 +52,8 @@
 pub use code::RepetitionCode;
 pub use counter::LogicalCounts;
 pub use estimates::AliceAndBobEstimates;
+#[cfg(any(feature = "cli", feature = "python"))]
+pub use estimates::EstimatesReport;
 pub use factories::ToffoliBuilder;
 pub use qubit::CatQubit;
 

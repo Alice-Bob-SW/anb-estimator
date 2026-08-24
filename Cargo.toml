@@ -20,13 +20,15 @@ required-features = ["cli"]
 [features]
 default = ['cli']
 python = ["dep:pyo3", "pyo3/extension-module"]
-cli = ["dep:clap"]
+cli = ["dep:clap", "dep:serde", "dep:serde_json"]
 
 
 [dependencies]
 pyo3 = { version = "0.25", optional = true }
 anyhow = "1.0.81"
 clap = { version = "4.5.4", features = ["derive"], optional = true}
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
 num-bigint = "0.4"
 num-complex = "0.4"
 num-traits = "0.2"

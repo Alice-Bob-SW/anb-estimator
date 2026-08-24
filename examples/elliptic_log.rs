@@ -12,7 +12,7 @@
 use std::rc::Rc;
 
 use qsharp_alice_bob_resource_estimator::{
-    AliceAndBobEstimates, CatQubit, LogicalCounts, RepetitionCode, ToffoliBuilder,
+    AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts, RepetitionCode, ToffoliBuilder,
 };
 use resource_estimator::estimates::{ErrorBudget, PhysicalResourceEstimation};
 
@@ -47,15 +47,16 @@ fn main() -> Result<(), anyhow::Error> {
     let estimation =
         PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(count), budget);
     let result: AliceAndBobEstimates = estimation.estimate()?.into();
+    let report = EstimatesReport::from(&result);
     println!("Estimates from pre-computed logical count (elliptic curve discrete logarithm):");
-    println!("{result}");
+    println!("{report}");
 
     println!("----------------------------------------");
     println!("Exploration of good estimates from pre-computed logical count (elliptic curve discrete logarithm):");
     let results = estimation.build_frontier()?;
 
     for r in results {
-        println!("{}", AliceAndBobEstimates::from(r));
+        println!("{}", EstimatesReport::from(&AliceAndBobEstimates::from(r)));
     }
 
     Ok(())
