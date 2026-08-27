@@ -175,3 +175,74 @@ impl Backend for LogicalCounts {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn budget() -> ErrorBudget {
+        ErrorBudget::new(0.1, 0.1, 0.0)
+    }
+
+    #[test]
+    /// 2.2 cycles per CX, 10.1 cycles per CCX, rounded up (arXiv:2302.06639,
+    /// Fig. 27, Fig. 33).
+    fn logical_depth_matches_2_2_cx_plus_10_1_ccx() {
+        let cases: [(u64, u64, u64); 4] = [(0, 0, 0), (10, 0, 22), (0, 10, 101), (10, 5, 73)];
+
+        for (cx, ccx, expected) in cases {
+            let counts = LogicalCounts::new(0, cx, ccx);
+            assert_eq!(counts.logical_depth(&budget()), expected);
+        }
+    }
+
+    #[test]
+    fn logical_qubits_overhead_formula() {
+        for qubit_count in [0, 1, 2, 3, 40, 2333] {
+            let counts = LogicalCounts::new(qubit_count, 0, 0);
+            let expected = qubit_count + (qubit_count.div_ceil(2) + 1);
+            assert_eq!(counts.logical_qubits(), expected);
+        }
+    }
+
+    #[test]
+    /// Mirrors the README's "Supported gates and their costs" table.
+    fn backend_gate_costs_match_readme_table() {
+        let mut counts = LogicalCounts::default();
+
+        let q0 = counts.qubit_allocate();
+        let q1 = counts.qubit_allocate();
+        let q2 = counts.qubit_allocate();
+
+        counts.ccx(q0, q1, q2);
+        counts.cx(q0, q1);
+        counts.cy(q0, q1);
+        counts.cz(q0, q1);
+        counts.swap(q0, q1);
+        counts.x(q0);
+        counts.y(q0);
+        counts.z(q0);
+        counts.h(q0);
+        counts.sadj(q0);
+        counts.s(q0);
+        let _ = counts.m(q0);
+        let _ = counts.mresetz(q0);
+        counts.reset(q0);
+
+        assert_eq!(counts.qubit_count, 3);
+        assert_eq!(counts.ccx_count, 1);
+        // cx + cy + cz (1 each) + swap (3) = 6
+        assert_eq!(counts.cx_count, 6);
+    }
+
+    #[test]
+    fn qubit_allocate_reuses_released_qubits() {
+        let mut counts = LogicalCounts::default();
+        let q0 = counts.qubit_allocate();
+        counts.qubit_release(q0);
+        let q1 = counts.qubit_allocate();
+
+        assert_eq!(q0, q1);
+        assert_eq!(counts.qubit_count, 1);
+    }
+}
