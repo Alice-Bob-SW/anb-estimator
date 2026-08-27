@@ -239,3 +239,89 @@ impl ErrorCorrection for RepetitionCode {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_close(actual: f64, expected: f64, relative_tolerance: f64) {
+        assert!(
+            (actual - expected).abs() <= relative_tolerance * expected.abs(),
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    /// Expected values from arXiv:2302.06639 (eq. 3, eq. 4, eq. D8):
+    /// `d*(5.6e-2*(alpha_sq^0.86 * k1_k2/0.013)^((d+1)/2) + 2*(d-1)*0.5*exp(-2*alpha_sq))`.
+    fn logical_error_rate_matches_paper_formula() {
+        let qec = RepetitionCode::new();
+        let qubit = CatQubit::new();
+
+        let cases = [
+            (3, 3.75, 3.3195e-3),
+            (5, 7.15, 1.2341e-5),
+            (7, 9.71, 1.5496e-7),
+            (9, 11.64, 5.5894e-9),
+            (11, 15.0, 1.0443e-11),
+            (13, 20.0, 8.5464e-15),
+        ];
+
+        for (distance, alpha_sq, expected) in cases {
+            let parameter = CodeParameter::new(distance, alpha_sq);
+            let actual = qec
+                .logical_error_rate(&qubit, &parameter)
+                .expect("logical error rate should compute");
+            assert_close(actual, expected, 1e-4);
+        }
+    }
+
+    #[test]
+    fn physical_qubits_is_two_d_minus_one() {
+        let qec = RepetitionCode::new();
+        for distance in [1, 3, 5, 9, 49] {
+            let parameter = CodeParameter::new(distance, 10.0);
+            assert_eq!(
+                qec.physical_qubits(&parameter).expect("should compute"),
+                2 * distance - 1
+            );
+        }
+    }
+
+    #[test]
+    fn logical_cycle_time_is_500_times_d() {
+        let qec = RepetitionCode::new();
+        let qubit = CatQubit::new();
+        for distance in [1, 3, 5, 9, 49] {
+            let parameter = CodeParameter::new(distance, 10.0);
+            assert_eq!(
+                qec.logical_cycle_time(&qubit, &parameter)
+                    .expect("should compute"),
+                500 * distance
+            );
+        }
+    }
+
+    #[test]
+    /// Checks the bit-flip-dominated regime only. Past `alpha_sq` ~17 (at
+    /// d=9) the phase-flip term takes over and the rate rises again; that
+    /// is expected, not a defect.
+    fn logical_error_rate_decreases_with_alpha_sq() {
+        let qec = RepetitionCode::new();
+        let qubit = CatQubit::new();
+        let distance = 9;
+
+        let mut previous = f64::INFINITY;
+        for alpha_sq in 3..=16 {
+            let parameter = CodeParameter::new(distance, f64::from(alpha_sq));
+            let current = qec
+                .logical_error_rate(&qubit, &parameter)
+                .expect("should compute");
+            assert!(
+                current < previous,
+                "logical_error_rate should decrease as alpha_sq grows (alpha_sq={alpha_sq})"
+            );
+            previous = current;
+        }
+    }
+}

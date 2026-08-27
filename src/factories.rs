@@ -269,6 +269,14 @@ impl Default for ToffoliBuilder {
     }
 }
 
+impl ToffoliBuilder {
+    /// The factories in this builder, in Table III order.
+    #[must_use]
+    pub fn factories(&self) -> &[ToffoliFactory] {
+        &self.factories
+    }
+}
+
 impl FactoryBuilder<RepetitionCode> for ToffoliBuilder {
     type Factory = ToffoliFactory;
 
@@ -302,5 +310,109 @@ impl FactoryBuilder<RepetitionCode> for ToffoliBuilder {
     fn num_magic_state_types(&self) -> usize {
         // Same implementation as the provided one.
         1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use estimates::Factory;
+    use std::rc::Rc;
+
+    /// Transcribed directly from arXiv:2302.06639 Table III (p. 35).
+    const TABLE_III: [(u64, f64, f64, usize, f64); 15] = [
+        (3, 3.75, 1.05e-3, 23, 0.84),
+        (3, 5.08, 1.02e-4, 29, 0.745), // alpha_sq is 3.93 in v2 of the paper, should be 5.08 (typo)
+        (3, 5.32, 8.14e-5, 35, 0.66),
+        (5, 7.15, 4.62e-6, 46, 0.456),
+        (5, 8.18, 7.00e-7, 53, 0.362),
+        (5, 8.38, 5.36e-7, 60, 0.288),
+        (7, 9.71, 6.14e-8, 73, 0.148),
+        (7, 10.76, 8.40e-9, 81, 0.105),
+        (7, 11.06, 5.16e-9, 89, 0.0727),
+        (9, 11.64, 2.28e-9, 104, 0.0262),
+        (9, 12.83, 2.30e-10, 113, 0.0154),
+        (9, 13.44, 7.36e-11, 122, 0.00975),
+        (19, 17.35, 7.90e-12, 9576, 1.0),
+        (21, 18.94, 5.40e-13, 14112, 1.0),
+        (23, 20.53, 3.74e-14, 21344, 1.0),
+    ];
+
+    #[test]
+    fn default_factories_match_table_iii() {
+        let builder = ToffoliBuilder::default();
+        assert_eq!(builder.factories.len(), TABLE_III.len());
+
+        for (factory, (distance, alpha_sq, error_probability, steps, acceptance_probability)) in
+            builder.factories.iter().zip(TABLE_III)
+        {
+            assert_eq!(factory.code_parameter.distance, distance);
+            assert!((factory.code_parameter.alpha_sq - alpha_sq).abs() < 1e-9);
+            assert!(
+                (factory.error_probability() - error_probability).abs() <= error_probability * 1e-9
+            );
+            assert_eq!(factory.steps, steps);
+            assert!((factory.acceptance_probability - acceptance_probability).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    /// A factory has 5 lines: 4 logical qubits and 1 routing qubit. Each
+    /// line has 2d-1 physical qubits: d data qubits and d-1 ancilla qubits
+    /// (arXiv:2302.06639, Fig. 25).
+    fn physical_qubits_is_five_times_two_d_minus_one() {
+        for factory in ToffoliBuilder::default().factories {
+            let d = factory.code_parameter.distance;
+            assert_eq!(factory.physical_qubits(), 5 * (2 * d - 1));
+        }
+    }
+
+    #[test]
+    fn duration_matches_formula() {
+        for factory in ToffoliBuilder::default().factories {
+            let t = 100.0; // 1/κ₂ [nanoseconds]
+            let gate_time = 89.2 * t / factory.code_parameter.alpha_sq;
+            let steps = f64::from_usize(factory.steps).expect("steps should convert to f64");
+            let expected =
+                u64::from_f64((gate_time * steps / factory.acceptance_probability).round())
+                    .expect("duration should convert to u64");
+            assert_eq!(factory.duration(), expected);
+        }
+    }
+
+    #[test]
+    fn find_factories_filters_by_error_and_sorts_by_volume() {
+        let builder = ToffoliBuilder::default();
+        let qec = RepetitionCode::new();
+        let qubit = Rc::new(CatQubit::new());
+        let output_error_rate = 1e-6;
+
+        let factories = builder
+            .find_factories(
+                &qec,
+                &qubit,
+                0,
+                output_error_rate,
+                &CodeParameter::new(49, 30.0),
+            )
+            .expect("should find factories");
+
+        assert!(!factories.is_empty());
+        for factory in &factories {
+            assert!(factory.error_probability() <= output_error_rate);
+        }
+        for pair in factories.windows(2) {
+            assert!(pair[0].normalized_volume() <= pair[1].normalized_volume());
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Requested error probability is too low")]
+    fn find_factories_panics_below_lowest_error_probability() {
+        let builder = ToffoliBuilder::default();
+        let qec = RepetitionCode::new();
+        let qubit = Rc::new(CatQubit::new());
+
+        let _ = builder.find_factories(&qec, &qubit, 0, 3.74e-14, &CodeParameter::new(49, 30.0));
     }
 }

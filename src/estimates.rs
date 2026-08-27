@@ -7,16 +7,24 @@
 use std::fmt::Display;
 use std::ops::Deref;
 
+use std::rc::Rc;
+
 #[cfg(any(feature = "cli", feature = "python"))]
 use num_traits::FromPrimitive;
 use num_traits::ToPrimitive;
 #[cfg(feature = "python")]
 use pyo3::pyclass;
 use resource_estimator::estimates::{
-    ErrorBudget, FactoryPart, Overhead, PhysicalResourceEstimationResult,
+    self, ErrorBudget, Factory, FactoryPart, LogicalPatch, Overhead, PhysicalResourceEstimation,
+    PhysicalResourceEstimationResult,
 };
 
-use crate::{code::RepetitionCode, counter::LogicalCounts, factories::ToffoliFactory};
+use crate::{
+    code::{CodeParameter, RepetitionCode},
+    counter::LogicalCounts,
+    factories::{ToffoliBuilder, ToffoliFactory},
+    qubit::CatQubit,
+};
 
 /// Represents a physical resources estimate for Alice & Bob's architecture.
 pub struct AliceAndBobEstimates(
@@ -73,6 +81,59 @@ impl AliceAndBobEstimates {
         });
 
         logical + magic_states
+    }
+
+    /// Builds an estimate from a fixed code parameter, factory, and factory
+    /// count.
+    ///
+    /// `num_factories` must be at least 1. The factory's own code parameter
+    /// is independent of `code_parameter`; look it up with
+    /// [`ToffoliBuilder::factories`](crate::ToffoliBuilder::factories).
+    pub fn from_fixed_parameters(
+        count: LogicalCounts,
+        code_parameter: CodeParameter,
+        factory: ToffoliFactory,
+        num_factories: u64,
+    ) -> Result<Self, estimates::Error> {
+        let qubit = Rc::new(CatQubit::new());
+        let qec = RepetitionCode::new();
+        let layout = Rc::new(count);
+
+        let logical_patch = LogicalPatch::new(&qec, code_parameter, qubit.clone())?;
+
+        // `LogicalCounts`'s `Overhead` impl ignores the budget.
+        let budget = ErrorBudget::new(0.0, 0.0, 0.0);
+        let num_magic_states = layout.num_magic_states(&budget, 0);
+
+        // Number of logical cycles: the larger of the cycles the algorithm
+        // needs and the cycles needed for magic-state production at this
+        // factory count.
+        let required_runs = num_magic_states.div_ceil(num_factories * factory.num_output_states());
+        let required_duration = required_runs * factory.duration();
+        let num_cycles_for_magic_states =
+            required_duration.div_ceil(logical_patch.logical_cycle_time());
+        let num_cycles = layout
+            .logical_depth(&budget)
+            .max(num_cycles_for_magic_states);
+
+        let factory_error_probability = factory.error_probability();
+        let factory_part = FactoryPart::new(
+            factory,
+            num_factories,
+            num_magic_states,
+            factory_error_probability,
+        );
+
+        let estimation =
+            PhysicalResourceEstimation::new(qec, qubit, ToffoliBuilder::default(), layout, budget);
+        Ok(PhysicalResourceEstimationResult::new(
+            &estimation,
+            logical_patch,
+            num_cycles,
+            vec![Some(factory_part)],
+            0.0, // required_logical_error_rate: unused by `EstimatesReport`/`total_error`
+        )
+        .into())
     }
 }
 
