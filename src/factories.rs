@@ -1,7 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Copyright (c) Alice & Bob.
-// Licensed under the MIT License.
-
 //! Toffoli magic states factories.
 //!
 //! The factories are based on fault-tolerant measurement of stabilizers of the

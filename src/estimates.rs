@@ -1,6 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 //! Convenience structure to display resource estimation results.
 
 #[cfg(any(feature = "cli", feature = "python"))]

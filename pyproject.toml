@@ -1,5 +1,6 @@
 [project]
 name = "anb-estimator"
+license = "MIT"
 requires-python = ">=3.13,<3.14"
 classifiers = [
     "Programming Language :: Rust",

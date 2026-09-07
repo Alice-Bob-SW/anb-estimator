@@ -1,7 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Copyright (c) Alice & Bob.
-// Licensed under the MIT License.
-
 //! Model for cat qubits.
 //!
 //! Cat qubits are characterized by:

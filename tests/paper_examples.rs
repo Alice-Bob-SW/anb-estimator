@@ -1,7 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Copyright (c) Alice & Bob.
-// Licensed under the MIT License.
-
 //! End-to-end checks that the resource estimator's output stays consistent
 //! with arXiv:2302.06639 for the two scenarios also demonstrated in
 //! `examples/elliptic_log.rs` and `examples/from_qsharp.rs`.
