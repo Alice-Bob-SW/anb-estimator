@@ -1,24 +1,22 @@
 from math import floor
 from warnings import warn
-from typing import Optional
-from qualtran import Bloq  # type: ignore[import-untyped]
-from qsharp_alice_bob_resource_estimator.qualtran_interface import count_resources
 
-from qsharp_alice_bob_resource_estimator._native import (  # type: ignore[import-untyped]
-    _estimate_qsharp_file,
+from qualtran import Bloq
+
+from qsharp_alice_bob_resource_estimator._native import (  # ty: ignore[unresolved-import]
     _estimate_logical_counts,
+    _estimate_qsharp_file,
 )
-
-
 from qsharp_alice_bob_resource_estimator.dataclass_wrappers import (
-    Estimates,
     ErrorBudget,
+    Estimates,
     FullResults,
     LogicalCounts,
-)  # type: ignore[import-untyped]
+)
+from qsharp_alice_bob_resource_estimator.qualtran_interface import count_resources
 
 
-def _check_error_inputs(error_total: Optional[float], error_budget: Optional[ErrorBudget]) -> None:
+def _check_error_inputs(error_total: float | None, error_budget: ErrorBudget | None) -> None:
     """
     Ensure that exactly one of `error_total` or `error_budget` is set, and that they are non-negative.
     """
@@ -59,7 +57,7 @@ def _format_logical_counts_input(logical_counts: LogicalCounts) -> LogicalCounts
             raise ValueError(
                 f"{k} must be an integer or a float representing an integer (e.g., 3.0)"
             )
-        return int(floor(val))
+        return floor(val)
 
     if logical_counts.qubit_count == 0:
         raise ValueError("The number of qubits must be > 0")
@@ -74,8 +72,8 @@ def _format_logical_counts_input(logical_counts: LogicalCounts) -> LogicalCounts
 def estimate_logical_counts(
     logical_counts: LogicalCounts,
     frontier: bool,
-    error_total: Optional[float] = None,
-    error_budget: Optional[ErrorBudget] = None,
+    error_total: float | None = None,
+    error_budget: ErrorBudget | None = None,
 ) -> FullResults:
     """
     Runs the estimation based on logical counts and returns the results as an Estimates class.
@@ -97,7 +95,7 @@ def estimate_logical_counts(
     _safe_counts = _format_logical_counts_input(logical_counts)
 
     if not isinstance(frontier, bool):
-        raise ValueError("frontier must be a boolean")
+        raise TypeError("frontier must be a boolean")
 
     _check_error_inputs(error_total, error_budget)
 
@@ -118,8 +116,8 @@ def estimate_logical_counts(
 def estimate_from_qualtran(
     bloq: Bloq,
     frontier: bool,
-    error_total: Optional[float] = None,
-    error_budget: Optional[ErrorBudget] = None,
+    error_total: float | None = None,
+    error_budget: ErrorBudget | None = None,
 ) -> FullResults:
     """
     Runs the Qualtran estimation and returns the results as an EstimatesPy class.
@@ -154,8 +152,8 @@ def estimate_from_qualtran(
 def estimate_qsharp_file(
     file_path: str,
     frontier: bool,
-    error_total: Optional[float] = None,
-    error_budget: Optional[ErrorBudget] = None,
+    error_total: float | None = None,
+    error_budget: ErrorBudget | None = None,
 ) -> FullResults:
     """
     Runs the estimation for a Q# file and returns the results as a dataclass.
@@ -172,12 +170,12 @@ def estimate_qsharp_file(
     """
     # --- validate inputs ---
     if not isinstance(file_path, str):
-        raise ValueError("file_path must be a string")
+        raise TypeError("file_path must be a string")
     if not file_path.endswith(".qs"):
         raise ValueError("file_path must point to a Q# .qs file")
 
     if not isinstance(frontier, bool):
-        raise ValueError("frontier must be a boolean")
+        raise TypeError("frontier must be a boolean")
 
     warn(ARBITRARY_CIRCUIT_WARN)
 

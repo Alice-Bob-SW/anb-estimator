@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
@@ -11,39 +15,33 @@ env:
 jobs:
   build_and_test:
     name: Check, compile, run and doc - ${{matrix.os}} - ${{matrix.toolchain}}
-    runs-on:  ${{matrix.os}}
+    runs-on: ${{matrix.os}}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         toolchain: [stable]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install rust (${{matrix.os}}-${{matrix.toolchain}})
         run: rustup update ${{matrix.toolchain}} && rustup default ${{matrix.toolchain}}
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Cache cargo registry and build
+        uses: actions/cache@v6
         with:
-          path: ~/.cargo
-          key: ${{runner.os}}-cargo-registry-${{github.sha}}
-          restore-keys: ${{runner.os}}-cargo-registry-
-      - name: Cache cargo target
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-target-${{github.sha}}
-          restore-keys: ${{runner.os}}-cargo-target-
+          path: |
+            ~/.cargo
+            target
+          key: ${{runner.os}}-cargo-${{github.sha}}
+          restore-keys: ${{runner.os}}-cargo-
       - name: fmt
-        continue-on-error: true
         run: cargo fmt --check
       - name: clippy
-        continue-on-error: true
         run: cargo clippy -- -D warnings
       - name: Build debug
         run: cargo build
       - name: build release
         run: cargo build --release
       - name: Save executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{matrix.os}}-qsharp_alice_bob_resource_estimator_cli
           path: target/release/qsharp_alice_bob_resource_estimator_cli${{ runner.os == 'Windows' && '.exe' || ''}}
@@ -56,13 +54,12 @@ jobs:
       - name: doc
         run: cargo doc --release --no-deps
       - name: Save doc
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{matrix.os}}-doc
           path: target/doc
 
-  python: 
-    # This part was entirely vibecoded
+  python:
     name: Python build & lint - ${{matrix.os}}
     runs-on: ${{matrix.os}}
     strategy:
@@ -71,12 +68,10 @@ jobs:
         # Matches the platforms declared in pixi.toml (linux-64, osx-arm64, win-64).
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
-      - name: Install rust (needed by maturin to compile the extension)
-        run: rustup update stable && rustup default stable
-      - name: Set up pixi (Linux/macOS) 
-        # It would be cleaner to use `prefix-dev/setup-pixi@v0.8.1'
-        # but it is not allowed "because all actions must be from a repository owned by Alice-Bob-SW or created by GitHub."
+      - uses: actions/checkout@v7
+      - name: Set up pixi (Linux/macOS)
+        # `prefix-dev/setup-pixi` is not allowed here: all actions must come from
+        # a repository owned by Alice-Bob-SW or created by GitHub.
         if: runner.os != 'Windows'
         run: |
           curl -fsSL https://pixi.sh/install.sh | bash
@@ -87,11 +82,13 @@ jobs:
           iwr -useb https://pixi.sh/install.ps1 | iex
           echo "$env:USERPROFILE\.pixi\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
-      - name: Build and install the native extension (maturin develop)
-        run: pixi run -e dev maturin develop
+      - name: Install environment and build the native extension
+        run: pixi install -e dev
       - name: Ruff lint
         run: pixi run -e dev ruff check qsharp_alice_bob_resource_estimator
       - name: Ruff format check
         run: pixi run -e dev ruff format --check qsharp_alice_bob_resource_estimator
+      - name: ty check
+        run: pixi run -e dev ty check qsharp_alice_bob_resource_estimator
       - name: Import smoke test
         run: pixi run -e dev python -c "import qsharp_alice_bob_resource_estimator; from qsharp_alice_bob_resource_estimator import estimate_logical_counts, LogicalCounts; print('qsharp_alice_bob_resource_estimator import OK')"

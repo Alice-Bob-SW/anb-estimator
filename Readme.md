@@ -29,12 +29,7 @@ pixi install
 ```
 will create and manage the project environment for you, including installing Python, Rust, and any required dependencies defined in the project configuration. In addition, you’ll need a working native build toolchain for your operating system (Xcode Command Line Tools on macOS, build-essential on Linux, or Microsoft C++ Build Tools on Windows) in order to compile the Rust library behind both the CLI and the Python API, see [Installation - The Rust Programming Language](https://doc.rust-lang.org/book/ch01-01-installation.html).
 
-In order to connect its Rust logic to Python, the project relies on [PyO3/maturin](https://github.com/pyo3/maturin). You can use `pixi run maturin --version` to check that it has been properly installed.
-
-In order to build the python interface, run
-```bash
-pixi run maturin develop --uv
-```
+In order to connect its Rust logic to Python, the project relies on [PyO3/maturin](https://github.com/pyo3/maturin). `pixi install` builds the python interface and installs it in the environment as an editable package, so no separate build step is needed. To rebuild after changing the Rust code, run `pixi install` again (or `pixi run maturin develop` for a quicker incremental build without going through the full dependency resolution).
 
 ## Program description
 

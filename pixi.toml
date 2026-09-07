@@ -5,20 +5,16 @@ platforms = ["osx-arm64","win-64", "linux-64", "linux-aarch64"]
 [environments]
 dev = ["dev"]
 
-[tasks]
-
 [dependencies]
 graphviz = ">=13.1.2,<14"
-python = ">=3.11,<3.14"
+python = ">=3.13,<3.14"
 maturin = ">=1.13.3,<2"
-uv = ">=0.10.2,<0.11"
 numba = ">=0.63.1"
-rust = ">=1.96.0,<1.97"
+rust = ">=1.98.0,<1.99"
 
 [feature.dev.dependencies]
-ruff = "*"
-pytest = ">=9.0.2,<10"
-
+ruff = "==0.16.5"
+ty = "==0.0.78"
 
 [pypi-dependencies]
-qualtran = { git = "https://github.com/quantumlib/Qualtran" }
+qsharp_alice_bob_resource_estimator = { path = ".", editable = true }
