@@ -9,8 +9,8 @@ use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use qsharp_alice_bob_resource_estimator::estimates::make_budget;
-use qsharp_alice_bob_resource_estimator::{
+use anb_estimator::estimates::make_budget;
+use anb_estimator::{
     AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts, RepetitionCode, ToffoliBuilder,
 };
 use resource_estimator::estimates::PhysicalResourceEstimation;

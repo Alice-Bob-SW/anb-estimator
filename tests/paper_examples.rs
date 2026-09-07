@@ -8,7 +8,7 @@
 
 use std::rc::Rc;
 
-use qsharp_alice_bob_resource_estimator::{
+use anb_estimator::{
     code::CodeParameter, AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts,
     RepetitionCode, ToffoliBuilder,
 };

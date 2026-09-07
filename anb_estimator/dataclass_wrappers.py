@@ -2,7 +2,7 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Any, NamedTuple
 
-from qsharp_alice_bob_resource_estimator._native import (  # ty: ignore[unresolved-import]
+from anb_estimator._native import (  # ty: ignore[unresolved-import]
     EstimatesReport,
     LogicalCountsPy,
 )

@@ -11,7 +11,7 @@
 
 use std::rc::Rc;
 
-use qsharp_alice_bob_resource_estimator::{
+use anb_estimator::{
     AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts, RepetitionCode, ToffoliBuilder,
 };
 use resource_estimator::estimates::{ErrorBudget, PhysicalResourceEstimation};

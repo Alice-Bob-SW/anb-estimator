@@ -1,5 +1,5 @@
 [package]
-name = "qsharp_alice_bob_resource_estimator"
+name = "anb-estimator"
 version = "0.2.0"
 edition = "2021"
 description = "A resource estimator for running quantum algorithms on Alice and Bob's hardware."
@@ -9,11 +9,11 @@ categories = ["science"]
 
 [lib]
 # Build both the normal Rust lib and the Python extension (.so/.pyd)
-name = "qsharp_alice_bob_resource_estimator"
+name = "anb_estimator"
 crate-type = ["rlib", "cdylib"]
 
 [[bin]]
-name = "qsharp_alice_bob_resource_estimator_cli"
+name = "anb_estimator_cli"
 path = "src/main.rs"
 required-features = ["cli"]
 

@@ -3,17 +3,17 @@ from warnings import warn
 
 from qualtran import Bloq
 
-from qsharp_alice_bob_resource_estimator._native import (  # ty: ignore[unresolved-import]
+from anb_estimator._native import (  # ty: ignore[unresolved-import]
     _estimate_logical_counts,
     _estimate_qsharp_file,
 )
-from qsharp_alice_bob_resource_estimator.dataclass_wrappers import (
+from anb_estimator.dataclass_wrappers import (
     ErrorBudget,
     Estimates,
     FullResults,
     LogicalCounts,
 )
-from qsharp_alice_bob_resource_estimator.qualtran_interface import count_resources
+from anb_estimator.qualtran_interface import count_resources
 
 
 def _check_error_inputs(error_total: float | None, error_budget: ErrorBudget | None) -> None:

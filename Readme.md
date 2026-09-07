@@ -77,7 +77,7 @@ Use the subcommand `help` to have the documentation of the executable.
 
 Basic form is either (depending if you are still developing or if you installed the executable):
 * `cargo run -- [OPTIONS] <COMMAND>`
-* `qsharp_alice_bob_resource_estimator_cli [OPTIONS] <COMMAND>`
+* `anb_estimator_cli [OPTIONS] <COMMAND>`
 
 **Commands:**
 - `resources <qubits> <cx> <ccx>` — directly passes the pre-layout logical resource cost.
@@ -102,7 +102,7 @@ Two example files can be executed:
 
 ### Python Usage
 
-In order to be able to use `import qsharp_alice_bob_resource_estimator` from python scripts in the repository, it is recommended to run them via
+In order to be able to use `import anb_estimator` from python scripts in the repository, it is recommended to run them via
 ```bash
 pixi run python script-name
 ```
@@ -111,7 +111,7 @@ For an end-to-end walkthrough, see the notebook `examples/getting_started.ipynb`
 ```bash
 pixi run jupyter notebook
 ```
-(This should run on VSCode as well, but an issue has been reported on Windows platform where it was impossible to import `qsharp_alice_bob_resource_estimator` if the notebook was not run via the above command.)
+(This should run on VSCode as well, but an issue has been reported on Windows platform where it was impossible to import `anb_estimator` if the notebook was not run via the above command.)
 
 ## Supported gates and their costs
 
