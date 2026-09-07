@@ -1,7 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Copyright (c) Alice & Bob
-// Licensed under the MIT License.
-
 #![warn(missing_docs)]
 //! Resource estimator for a cat-based quantum processor using repetition code
 //! and preparation of Toffoli magical states by fault-tolerant measurement.

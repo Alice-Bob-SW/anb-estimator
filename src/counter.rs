@@ -1,7 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Copyright (c) Alice & Bob.
-// Licensed under the MIT License.
-
 //! Tools to manipulate counts of logical qubits and gates.
 //!
 //! Can compute logical space and time overheads for resource estimation from Q#

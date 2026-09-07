@@ -1,7 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Copyright (c) Alice & Bob.
-// Licensed under the MIT License.
-
 //! Repetition code for biased error correction with a focus on phase flips.
 //!
 //! The code and its performances are described in

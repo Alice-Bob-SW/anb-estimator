@@ -3,6 +3,7 @@ name = "anb-estimator"
 version = "0.2.0"
 edition = "2021"
 description = "A resource estimator for running quantum algorithms on Alice and Bob's hardware."
+license = "MIT"
 readme = "Readme.md"
 keywords = ["quantum", "qsharp", "resource-estimation"]
 categories = ["science"]

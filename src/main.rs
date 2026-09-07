@@ -1,6 +1,3 @@
-// Copyright (c) Alice & Bob
-// Licensed under the Apache License.
-
 //! Command line interface to the resource estimator for cat-based quantum
 //! computer with repetition code. The command-line is self documented, please
 //! use it with subcommand `help` to learn its usage.

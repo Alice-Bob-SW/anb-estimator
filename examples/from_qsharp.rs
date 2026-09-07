@@ -1,7 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Copyright (c) Alice & Bob
-// Licensed under the MIT License.
-
 #![warn(missing_docs)]
 //! Estimate the resources required for an adder, the adder being specified by a
 //! Q# file.

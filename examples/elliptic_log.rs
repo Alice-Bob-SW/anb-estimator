@@ -1,7 +1,3 @@
-// Copyright (c) Microsoft Corporation.
-// Copyright (c) Alice & Bob
-// Licensed under the MIT License.
-
 #![warn(missing_docs)]
 //! Estimate the resources required for Elliptic Curve Cryptography (ECC) on a
 //! cat-based quantum processor.
