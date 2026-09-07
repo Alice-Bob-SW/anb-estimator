@@ -1,9 +1,9 @@
-from qsharp_alice_bob_resource_estimator.dataclass_wrappers import (
+from anb_estimator.dataclass_wrappers import (
     ErrorBudget,
     FullResults,
     LogicalCounts,
 )
-from qsharp_alice_bob_resource_estimator.function_wrappers import (
+from anb_estimator.function_wrappers import (
     estimate_from_qualtran,
     estimate_logical_counts,
     estimate_qsharp_file,

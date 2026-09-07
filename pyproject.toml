@@ -1,5 +1,5 @@
 [project]
-name = "qsharp_alice_bob_resource_estimator"
+name = "anb-estimator"
 requires-python = ">=3.13,<3.14"
 classifiers = [
     "Programming Language :: Rust",
@@ -15,7 +15,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 features = ["python"]
-module-name = "qsharp_alice_bob_resource_estimator._native"
+module-name = "anb_estimator._native"
 
 [tool.ruff]
 line-length = 100

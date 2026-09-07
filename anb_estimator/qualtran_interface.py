@@ -9,7 +9,7 @@ from qualtran.resource_counting.generalizers import (
     ignore_split_join,
 )
 
-from qsharp_alice_bob_resource_estimator.dataclass_wrappers import LogicalCounts
+from anb_estimator.dataclass_wrappers import LogicalCounts
 
 default_generalizer = (ignore_alloc_free, ignore_split_join, generalize_cvs)
 

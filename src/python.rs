@@ -201,7 +201,7 @@ impl EstimatesReport {
 /// Any initialization failure is surfaced as a Python `RuntimeError`.
 #[pymodule]
 #[pyo3(name = "_native")]
-fn qsharp_alice_bob_resource_estimator(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+fn anb_estimator(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // functions
     m.add_function(wrap_pyfunction!(_estimate_qsharp_file, m)?)?;
     m.add_function(wrap_pyfunction!(_estimate_logical_counts, m)?)?;
