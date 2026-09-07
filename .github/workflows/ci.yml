@@ -93,3 +93,62 @@ jobs:
       - name: Import smoke test
         run: pixi run -e dev python -c "import anb_estimator; from anb_estimator import estimate_logical_counts, LogicalCounts; print('anb_estimator import OK')"
 
+  build_wheels:
+    name: Build wheel - ${{matrix.os}}
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build_and_test, python]
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up pixi (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL https://pixi.sh/install.sh | bash
+          echo "$HOME/.pixi/bin" >> "$GITHUB_PATH"
+      - name: Set up pixi (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          iwr -useb https://pixi.sh/install.ps1 | iex
+          echo "$env:USERPROFILE\.pixi\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+      - name: Install environment
+        run: pixi install -e dev
+      - name: Build wheel
+        run: pixi run -e dev maturin build --release -o dist
+      - name: Build sdist
+        if: runner.os == 'Linux'
+        run: pixi run -e dev maturin sdist -o dist
+      - name: Save distributables
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist-${{matrix.os}}
+          path: dist/*
+
+  publish:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build_wheels
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download distributables
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create ${{ github.ref_name }} dist/* --title ${{ github.ref_name }} --generate-notes
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          skip-existing: true
