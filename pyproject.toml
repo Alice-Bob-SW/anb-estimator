@@ -1,12 +1,13 @@
 [project]
 name = "qsharp_alice_bob_resource_estimator"
-requires-python = ">=3.11"
+requires-python = ">=3.13,<3.14"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
+dependencies = ["qualtran>=0.7.0"]
 
 [build-system]
 requires = ["maturin>=1.8,<2.0"]
@@ -16,17 +17,6 @@ build-backend = "maturin"
 features = ["python"]
 module-name = "qsharp_alice_bob_resource_estimator._native"
 
-[tool.mypy]
-strict = true
-ignore_missing_imports = true
-follow_imports = "silent"
-warn_unused_ignores = true
-disable_error_code = ["import-untyped"]
-
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-
-[tool.ruff.format]
-quote-style = "preserve"
-skip-magic-trailing-comma = true

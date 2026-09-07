@@ -1,15 +1,15 @@
-from typing import Any, Tuple
+from typing import Any
 
 # Import Qualtran tools
-from qualtran import Bloq  # type: ignore[import-untyped]
-from qualtran.resource_counting import get_cost_value, QubitCount  # type: ignore[import-untyped]
-from qualtran.resource_counting.generalizers import (  # type: ignore[import-untyped]
-    ignore_split_join,
-    ignore_alloc_free,
+from qualtran import Bloq
+from qualtran.resource_counting import QubitCount, get_cost_value
+from qualtran.resource_counting.generalizers import (
     generalize_cvs,
+    ignore_alloc_free,
+    ignore_split_join,
 )
 
-from qsharp_alice_bob_resource_estimator.dataclass_wrappers import LogicalCounts  # type: ignore[import-untyped]
+from qsharp_alice_bob_resource_estimator.dataclass_wrappers import LogicalCounts
 
 default_generalizer = (ignore_alloc_free, ignore_split_join, generalize_cvs)
 
@@ -24,8 +24,7 @@ def _round(value: Any, name: str):
 
 
 def count_resources(
-    bloq: Bloq,
-    graph_generalizer: Tuple[Any, ...] = default_generalizer,  # type: ignore
+    bloq: Bloq, graph_generalizer: tuple[Any, ...] = default_generalizer
 ) -> LogicalCounts:
     """Count the number of qubits, cx and ccx required for a given qualtran Bloq.
 
@@ -60,17 +59,17 @@ def count_resources(
     num_cx = 0
     num_ccx = 0
     if "CNOT" in dict_sigma:
-        num_cx += dict_sigma["CNOT"]  # type: ignore
+        num_cx += dict_sigma["CNOT"]
     if "TwoBitCSwap" in dict_sigma:  # needs to be decomposed on A&B architecture
-        num_cx += 2 * dict_sigma["TwoBitCSwap"]  # type: ignore
-        num_ccx += dict_sigma["TwoBitCSwap"]  # type: ignore
+        num_cx += 2 * dict_sigma["TwoBitCSwap"]
+        num_ccx += dict_sigma["TwoBitCSwap"]
     if "C[CNOT]" in dict_sigma:
-        num_cx += 0.5 * dict_sigma["C[CNOT]"]  # type: ignore
+        num_cx += 0.5 * dict_sigma["C[CNOT]"]
 
     if "Toffoli" in dict_sigma:  # needs to be decomposed on A&B architecture
-        num_ccx += dict_sigma["Toffoli"]  # type: ignore
-    if "And" in dict_sigma:  #
-        num_ccx += dict_sigma["And"]  # type: ignore
+        num_ccx += dict_sigma["Toffoli"]
+    if "And" in dict_sigma:
+        num_ccx += dict_sigma["And"]
 
     num_cx = _round(num_cx, "CX")
     num_ccx = _round(num_ccx, "CCX")
