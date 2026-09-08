@@ -14,7 +14,7 @@ use num_traits::FromPrimitive;
 use resource_estimator::estimates::{self, FactoryBuilder};
 use std::{borrow::Cow, fmt::Display, rc::Rc};
 
-use crate::{code::CodeParameter, CatQubit, RepetitionCode};
+use crate::{CatQubit, RepetitionCode, code::CodeParameter};
 
 /// Struct containing parameters of Toffoli magic states factories based on
 /// fault-tolerant measurement of stabilizers of the Toffoli magic state.
@@ -285,7 +285,7 @@ impl FactoryBuilder<RepetitionCode> for ToffoliBuilder {
         _magic_state_type: usize,
         output_error_rate: f64,
         _max_code_parameter: &CodeParameter,
-    ) -> Option<Vec<Cow<'_, Self::Factory>>> {
+    ) -> Result<Vec<Cow<'_, Self::Factory>>, String> {
         assert!(
             output_error_rate > self.lowest_error_probability,
             "Requested error probability is too low"
@@ -299,7 +299,7 @@ impl FactoryBuilder<RepetitionCode> for ToffoliBuilder {
             })
             .collect();
         factories.sort_unstable();
-        Some(factories)
+        Ok(factories)
     }
 
     /// Number of types of magic states.

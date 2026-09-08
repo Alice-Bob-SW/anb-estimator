@@ -12,8 +12,8 @@ use num_traits::ToPrimitive;
 #[cfg(feature = "python")]
 use pyo3::pyclass;
 use resource_estimator::estimates::{
-    self, ErrorBudget, Factory, FactoryPart, LogicalPatch, Overhead, PhysicalResourceEstimation,
-    PhysicalResourceEstimationResult,
+    self, ErrorBudget, Factory, FactoryPart, LogicalPatch, PhysicalResourceEstimation,
+    PhysicalResourceEstimationResult, RealizedOverhead,
 };
 
 use crate::{
@@ -24,9 +24,7 @@ use crate::{
 };
 
 /// Represents a physical resources estimate for Alice & Bob's architecture.
-pub struct AliceAndBobEstimates(
-    PhysicalResourceEstimationResult<RepetitionCode, ToffoliFactory, LogicalCounts>,
-);
+pub struct AliceAndBobEstimates(PhysicalResourceEstimationResult<RepetitionCode, ToffoliFactory>);
 
 impl AliceAndBobEstimates {
     #[must_use]
@@ -100,7 +98,8 @@ impl AliceAndBobEstimates {
 
         // `LogicalCounts`'s `Overhead` impl ignores the budget.
         let budget = ErrorBudget::new(0.0, 0.0, 0.0);
-        let num_magic_states = layout.num_magic_states(&budget, 0);
+        let realized_overhead = RealizedOverhead::from_overhead(&*layout, &budget, 1)?;
+        let num_magic_states = realized_overhead.num_magic_states()[0];
 
         // Number of logical cycles: the larger of the cycles the algorithm
         // needs and the cycles needed for magic-state production at this
@@ -109,8 +108,8 @@ impl AliceAndBobEstimates {
         let required_duration = required_runs * factory.duration();
         let num_cycles_for_magic_states =
             required_duration.div_ceil(logical_patch.logical_cycle_time());
-        let num_cycles = layout
-            .logical_depth(&budget)
+        let num_cycles = realized_overhead
+            .logical_depth()
             .max(num_cycles_for_magic_states);
 
         let factory_error_probability = factory.error_probability();
@@ -122,32 +121,31 @@ impl AliceAndBobEstimates {
         );
 
         let estimation =
-            PhysicalResourceEstimation::new(qec, qubit, ToffoliBuilder::default(), layout, budget);
+            PhysicalResourceEstimation::new(qec, qubit, ToffoliBuilder::default(), layout);
         Ok(PhysicalResourceEstimationResult::new(
             &estimation,
             logical_patch,
+            &budget,
             num_cycles,
             vec![Some(factory_part)],
             0.0, // required_logical_error_rate: unused by `EstimatesReport`/`total_error`
-        )
+        )?
         .into())
     }
 }
 
 impl Deref for AliceAndBobEstimates {
-    type Target = PhysicalResourceEstimationResult<RepetitionCode, ToffoliFactory, LogicalCounts>;
+    type Target = PhysicalResourceEstimationResult<RepetitionCode, ToffoliFactory>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl From<PhysicalResourceEstimationResult<RepetitionCode, ToffoliFactory, LogicalCounts>>
+impl From<PhysicalResourceEstimationResult<RepetitionCode, ToffoliFactory>>
     for AliceAndBobEstimates
 {
-    fn from(
-        value: PhysicalResourceEstimationResult<RepetitionCode, ToffoliFactory, LogicalCounts>,
-    ) -> Self {
+    fn from(value: PhysicalResourceEstimationResult<RepetitionCode, ToffoliFactory>) -> Self {
         Self(value)
     }
 }

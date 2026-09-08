@@ -19,9 +19,8 @@ fn main() -> Result<(), anyhow::Error> {
     let count = LogicalCounts::from_qsharp(filename).map_err(anyhow::Error::msg)?;
     let budget = ErrorBudget::new(0.001 * 0.5, 0.001 * 0.5, 0.0);
 
-    let estimation =
-        PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(count), budget);
-    let result: AliceAndBobEstimates = estimation.estimate()?.into();
+    let estimation = PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(count));
+    let result: AliceAndBobEstimates = estimation.estimate(&budget)?.into();
     let report = EstimatesReport::from(&result);
     println!("Resource estimate from Q# code (ripple-carry adder):");
     println!("{report}");

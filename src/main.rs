@@ -80,12 +80,11 @@ fn main() -> Result<(), anyhow::Error> {
         }
         Commands::Resources { qubits, cx, ccx } => LogicalCounts::new(qubits, cx, ccx),
     };
-    let estimation =
-        PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(count), budget);
+    let estimation = PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(count));
 
     if args.frontier {
         let reports: Vec<EstimatesReport> = estimation
-            .build_frontier()?
+            .build_frontier(&budget)?
             .into_iter()
             .map(|r| EstimatesReport::from(&AliceAndBobEstimates::from(r)))
             .collect();
@@ -96,7 +95,7 @@ fn main() -> Result<(), anyhow::Error> {
             std::fs::write(path, serde_json::to_string_pretty(&reports)?)?;
         }
     } else {
-        let result: AliceAndBobEstimates = estimation.estimate()?.into();
+        let result: AliceAndBobEstimates = estimation.estimate(&budget)?.into();
         let report = EstimatesReport::from(&result);
         println!("{report}");
         if let Some(path) = args.json {

@@ -196,7 +196,7 @@ impl ErrorCorrection for RepetitionCode {
             // arXiv:2302.06639 (p. 4, eq. 3 and app E2, p. 27)
             // this is eq. 3 in a more compact form
             Ok(code_distance_f64 * (lzp + lxp)) // First: logical phase-flip, second part: logical
-                                                // bit-flip
+        // bit-flip
         } else {
             Err("cannot compute logical failure probability".into())
         }
