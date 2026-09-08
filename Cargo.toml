@@ -33,8 +33,8 @@ serde_json = { version = "1", optional = true }
 num-bigint = "0.4"
 num-complex = "0.4"
 num-traits = "0.2"
-qsc = { git = "https://github.com/microsoft/qsharp.git", tag = "v1.6.0" }
-resource_estimator = { git = "https://github.com/microsoft/qsharp.git", tag = "v1.6.0" }
+qsc = { git = "https://github.com/microsoft/qdk.git", tag = "v1.32.0" }
+resource_estimator = { git = "https://github.com/microsoft/qdk.git", tag = "v1.32.0" }
 num-format = "0.4.4"
 
 

@@ -5,8 +5,8 @@
 use std::rc::Rc;
 
 use anb_estimator::{
-    code::CodeParameter, AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts,
-    RepetitionCode, ToffoliBuilder,
+    AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts, RepetitionCode, ToffoliBuilder,
+    code::CodeParameter,
 };
 use resource_estimator::estimates::{ErrorBudget, PhysicalResourceEstimation};
 
@@ -53,10 +53,9 @@ fn estimate(count: LogicalCounts, budget: ErrorBudget) -> EstimatesReport {
         Rc::new(CatQubit::new()),
         ToffoliBuilder::default(),
         Rc::new(count),
-        budget,
     );
     let result: AliceAndBobEstimates = estimation
-        .estimate()
+        .estimate(&budget)
         .expect("estimation should succeed")
         .into();
     EstimatesReport::from(&result)

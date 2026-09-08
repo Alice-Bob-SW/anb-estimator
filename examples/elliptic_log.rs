@@ -40,16 +40,17 @@ fn main() -> Result<(), anyhow::Error> {
     let count = elliptic_curve_crypto_count(bit_size, window_size);
     let budget = ErrorBudget::new(0.333 * 0.5, 0.333 * 0.5, 0.0);
 
-    let estimation =
-        PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(count), budget);
-    let result: AliceAndBobEstimates = estimation.estimate()?.into();
+    let estimation = PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(count));
+    let result: AliceAndBobEstimates = estimation.estimate(&budget)?.into();
     let report = EstimatesReport::from(&result);
     println!("Estimates from pre-computed logical count (elliptic curve discrete logarithm):");
     println!("{report}");
 
     println!("----------------------------------------");
-    println!("Exploration of good estimates from pre-computed logical count (elliptic curve discrete logarithm):");
-    let results = estimation.build_frontier()?;
+    println!(
+        "Exploration of good estimates from pre-computed logical count (elliptic curve discrete logarithm):"
+    );
+    let results = estimation.build_frontier(&budget)?;
 
     for r in results {
         println!("{}", EstimatesReport::from(&AliceAndBobEstimates::from(r)));

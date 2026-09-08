@@ -87,12 +87,11 @@ fn _estimate_qsharp_file(
         Rc::new(qubit),
         builder,
         counts.clone(), // share with PRE
-        budget,
     );
 
     // Single best estimate
     let single_est: AliceAndBobEstimates = estimation
-        .estimate()
+        .estimate(&budget)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?
         .into();
     let single_report = EstimatesReport::from(&single_est);
@@ -101,7 +100,7 @@ fn _estimate_qsharp_file(
     let mut frontier_report = Vec::new();
     if frontier {
         let results = estimation
-            .build_frontier()
+            .build_frontier(&budget)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         frontier_report = results
             .into_iter()
@@ -152,11 +151,11 @@ fn _estimate_logical_counts(
 
     let counts = LogicalCounts::new(qubits, cx, ccx);
     let estimation =
-        PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(counts), budget);
+        PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(counts));
 
     // Single best estimate
     let single_est: AliceAndBobEstimates = estimation
-        .estimate()
+        .estimate(&budget)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?
         .into();
     let single_report = EstimatesReport::from(&single_est);
@@ -165,7 +164,7 @@ fn _estimate_logical_counts(
     let mut frontier_report = Vec::new();
     if frontier {
         let results = estimation
-            .build_frontier()
+            .build_frontier(&budget)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         frontier_report = results
             .into_iter()
