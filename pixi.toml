@@ -12,9 +12,24 @@ maturin = ">=1.13.3,<2"
 numba = ">=0.63.1"
 rust = ">=1.98.0,<1.99"
 
+[tasks]
+fmt = "cargo fmt"
+fmt-check = "cargo fmt --check"
+check = "cargo check"
+clippy = "cargo clippy -- -D warnings"
+test = "cargo test"
+
 [feature.dev.dependencies]
 ruff = "==0.16.6"
 ty = "==0.0.79"
+
+[feature.dev.tasks]
+fmt-py = "ruff format anb_estimator"
+fmt-py-check = "ruff format --check anb_estimator"
+lint-py = "ruff check anb_estimator"
+typecheck = "ty check anb_estimator"
+import-check = "python -c \"import anb_estimator; from anb_estimator import estimate_logical_counts, LogicalCounts; print('anb_estimator import OK')\""
+ci = { depends-on = ["fmt-check", "check", "clippy", "fmt-py-check", "lint-py", "typecheck", "test", "import-check"] }
 
 [pypi-dependencies]
 anb-estimator = { path = ".", editable = true }
