@@ -3,21 +3,26 @@
 //! ! and explicit logical counts, returning structured results suitable for Python consumers.
 //! ! It leverages PyO3 to create Python-callable functions and classes.
 
+use num_traits::FromPrimitive;
 use pyo3::prelude::*; // brings Python, PyResult, PyModule, Bound, etc.
 use std::rc::Rc;
 
 use crate::estimates::make_budget;
 use crate::{
-    AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts, RepetitionCode, ToffoliBuilder,
+    AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts as InternalLogicalCounts,
+    RepetitionCode, ToffoliBuilder,
 };
 use resource_estimator::estimates::PhysicalResourceEstimation;
 
-/// Python-visible snapshot of logical counts extracted from a Q# program.
+/// Python-visible logical counts, either extracted from a Q# program or built
+/// directly by a Python caller.
 ///
 /// Exposes a minimal, read-only view sufficient for downstream analysis in Python.
 /// Fields correspond to logical resources observed by the interpreter.
-#[pyclass(frozen)]
-pub struct LogicalCountsPy {
+#[pyclass(frozen, skip_from_py_object)]
+#[derive(Clone, Debug, serde::Serialize)]
+#[allow(clippy::struct_field_names)]
+pub struct LogicalCounts {
     /// Number of (algorithm) logical qubits allocated by the interpreter.
     #[pyo3(get)]
     qubit_count: u64,
@@ -29,16 +34,81 @@ pub struct LogicalCountsPy {
     ccx_count: u64,
 }
 
-/// Converts an internal [`LogicalCounts`] reference into a Python-visible [`LogicalCountsPy`].
+#[pymethods]
+impl LogicalCounts {
+    /// Builds a [`LogicalCounts`] from Python, accepting floats that represent
+    /// integers (e.g. `3.0`) for convenience.
+    ///
+    /// # Errors
+    /// A `ValueError` if any count is negative or is not integer-valued.
+    #[allow(clippy::similar_names)]
+    #[new]
+    fn new(qubit_count: f64, cx_count: f64, ccx_count: f64) -> PyResult<Self> {
+        #[allow(clippy::float_cmp)]
+        fn to_uint(name: &str, val: f64) -> PyResult<u64> {
+            if val < 0.0 {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "{name} must be >= 0"
+                )));
+            }
+            if val != val.floor() {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "{name} must be an integer or a float representing an integer (e.g., 3.0)"
+                )));
+            }
+            u64::from_f64(val).ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(format!("{name} is too large"))
+            })
+        }
+
+        Ok(Self {
+            qubit_count: to_uint("qubit_count", qubit_count)?,
+            cx_count: to_uint("cx_count", cx_count)?,
+            ccx_count: to_uint("ccx_count", ccx_count)?,
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{self:?}")
+    }
+}
+
+/// Converts an internal [`InternalLogicalCounts`] reference into a Python-visible [`LogicalCounts`].
 ///
 /// Copies only primitive fields; no heap sharing is required.
-impl From<&LogicalCounts> for LogicalCountsPy {
-    fn from(c: &LogicalCounts) -> Self {
+impl From<&InternalLogicalCounts> for LogicalCounts {
+    fn from(c: &InternalLogicalCounts) -> Self {
         Self {
             qubit_count: c.qubit_count,
             cx_count: c.cx_count,
             ccx_count: c.ccx_count,
         }
+    }
+}
+
+/// Bundles a single estimate with its optional frontier and the logical
+/// counts it was computed from: the full result of one estimation call.
+#[pyclass(frozen, get_all, skip_from_py_object)]
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct FullResults {
+    estimates: EstimatesReport,
+    frontier: Option<Vec<EstimatesReport>>,
+    counts: LogicalCounts,
+}
+
+#[pymethods]
+impl FullResults {
+    fn __repr__(&self) -> String {
+        format!("{self:?}")
+    }
+
+    /// Serializes to a JSON object string.
+    ///
+    /// # Errors
+    /// Propagates any (unexpected) serialization failure as a `ValueError`.
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 }
 
@@ -51,12 +121,6 @@ impl From<&LogicalCounts> for LogicalCountsPy {
 /// - `error_total` — argument of make_budget ; mutually exclusive with `error_budget`.
 /// - `error_budget` — argument of make_budget ; mutually exclusive with `error_total`.
 ///
-/// # Returns
-/// A 3-tuple:
-/// 1. `EstimatesReport` — the single best estimate,
-/// 2. `Vec<EstimatesReport>` — optionally, the frontier (empty if `frontier == false`),
-/// 3. `LogicalCountsPy` — Python snapshot of the logical counts extracted from `filename`.
-///
 /// # Errors
 /// - I/O or parsing failures when loading the Q# file,
 /// - Failures during resource estimation.
@@ -67,7 +131,7 @@ fn _estimate_qsharp_file(
     frontier: bool,
     error_total: Option<f64>,
     error_budget: Option<(f64, f64, f64)>,
-) -> PyResult<(EstimatesReport, Vec<EstimatesReport>, LogicalCountsPy)> {
+) -> PyResult<FullResults> {
     // Build the estimation
     let qubit = CatQubit::new();
     let qec = RepetitionCode::new();
@@ -77,10 +141,10 @@ fn _estimate_qsharp_file(
 
     // Put counts behind an Rc so we can both pass it into PRE and also derive a Python view
     let counts = Rc::new(
-        LogicalCounts::from_qsharp(filename)
+        InternalLogicalCounts::from_qsharp(filename)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.clone()))?,
     );
-    let counts_py = LogicalCountsPy::from(counts.as_ref());
+    let counts_py = LogicalCounts::from(counts.as_ref());
 
     let estimation = PhysicalResourceEstimation::new(
         qec,
@@ -97,21 +161,28 @@ fn _estimate_qsharp_file(
     let single_report = EstimatesReport::from(&single_est);
 
     // Optional frontier
-    let mut frontier_report = Vec::new();
-    if frontier {
+    let frontier_report = if frontier {
         let results = estimation
             .build_frontier(&budget)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        frontier_report = results
-            .into_iter()
-            .map(|r| {
-                let est: AliceAndBobEstimates = r.into();
-                EstimatesReport::from(&est)
-            })
-            .collect();
-    }
+        Some(
+            results
+                .into_iter()
+                .map(|r| {
+                    let est: AliceAndBobEstimates = r.into();
+                    EstimatesReport::from(&est)
+                })
+                .collect(),
+        )
+    } else {
+        None
+    };
 
-    Ok((single_report, frontier_report, counts_py))
+    Ok(FullResults {
+        estimates: single_report,
+        frontier: frontier_report,
+        counts: counts_py,
+    })
 }
 
 /// Estimate resources from explicit logical counts and return typed results,
@@ -125,11 +196,6 @@ fn _estimate_qsharp_file(
 /// - `error_total` — argument of make_budget ; mutually exclusive with `error_budget`.
 /// - `error_budget` — argument of make_budget ; mutually exclusive with `error_total`.
 ///
-/// # Returns
-/// A tuple:
-/// 1. `EstimatesReport` — single best estimate,
-/// 2. `Vec<EstimatesReport>` — frontier (empty if `frontier == false`).
-///
 /// # Errors
 /// Propagates errors from the physical resource estimator.
 #[pyfunction]
@@ -141,7 +207,7 @@ fn _estimate_logical_counts(
     frontier: bool,
     error_total: Option<f64>,
     error_budget: Option<(f64, f64, f64)>,
-) -> PyResult<(EstimatesReport, Vec<EstimatesReport>)> {
+) -> PyResult<FullResults> {
     // Build the estimation
     let qubit = CatQubit::new();
     let qec = RepetitionCode::new();
@@ -149,9 +215,9 @@ fn _estimate_logical_counts(
     let budget = make_budget(error_total, error_budget)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
-    let counts = LogicalCounts::new(qubits, cx, ccx);
-    let estimation =
-        PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(counts));
+    let counts = InternalLogicalCounts::new(qubits, cx, ccx);
+    let counts_py = LogicalCounts::from(&counts);
+    let estimation = PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(counts));
 
     // Single best estimate
     let single_est: AliceAndBobEstimates = estimation
@@ -161,29 +227,34 @@ fn _estimate_logical_counts(
     let single_report = EstimatesReport::from(&single_est);
 
     // Optional frontier
-    let mut frontier_report = Vec::new();
-    if frontier {
+    let frontier_report = if frontier {
         let results = estimation
             .build_frontier(&budget)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        frontier_report = results
-            .into_iter()
-            .map(|r| {
-                let est: AliceAndBobEstimates = r.into();
-                EstimatesReport::from(&est)
-            })
-            .collect();
-    }
+        Some(
+            results
+                .into_iter()
+                .map(|r| {
+                    let est: AliceAndBobEstimates = r.into();
+                    EstimatesReport::from(&est)
+                })
+                .collect(),
+        )
+    } else {
+        None
+    };
 
-    Ok((single_report, frontier_report))
+    Ok(FullResults {
+        estimates: single_report,
+        frontier: frontier_report,
+        counts: counts_py,
+    })
 }
 
-/// Python-visible `__str__` for the shared [`EstimatesReport`], reusing its
-/// [`Display`](std::fmt::Display) implementation.
 #[pymethods]
 impl EstimatesReport {
-    fn __str__(&self) -> String {
-        self.to_string()
+    fn __repr__(&self) -> String {
+        format!("{self:?}")
     }
 }
 
@@ -207,7 +278,8 @@ fn anb_estimator(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
 
     // classes
     m.add_class::<EstimatesReport>()?;
-    m.add_class::<LogicalCountsPy>()?; // optional, but useful since you return it too
+    m.add_class::<LogicalCounts>()?;
+    m.add_class::<FullResults>()?;
 
     Ok(())
 }

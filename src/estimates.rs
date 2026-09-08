@@ -153,9 +153,9 @@ impl From<PhysicalResourceEstimationResult<RepetitionCode, ToffoliFactory>>
 /// Plain snapshot of an [`AliceAndBobEstimates`], shared by the CLI's JSON/text
 /// output and the Python bindings.
 #[cfg(any(feature = "cli", feature = "python"))]
-#[cfg_attr(feature = "python", pyclass(frozen, get_all, skip_from_py_object))]
-#[cfg_attr(feature = "cli", derive(serde::Serialize))]
-#[derive(Clone)]
+#[cfg_attr(feature = "python", pyclass(frozen, get_all, skip_from_py_object, str))]
+#[cfg_attr(any(feature = "cli", feature = "python"), derive(serde::Serialize))]
+#[derive(Clone, Debug)]
 pub struct EstimatesReport {
     /// Number of physical qubits, routing qubits included.
     pub physical_qubits: u64,
