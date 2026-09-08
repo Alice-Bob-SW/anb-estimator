@@ -1,7 +1,7 @@
 [package]
 name = "anb-estimator"
 version = "0.2.0"
-edition = "2021"
+edition = "2024"
 description = "A resource estimator for running quantum algorithms on Alice and Bob's hardware."
 license = "MIT"
 readme = "Readme.md"
@@ -25,14 +25,14 @@ cli = ["dep:clap", "dep:serde", "dep:serde_json"]
 
 
 [dependencies]
-pyo3 = { version = "0.25", optional = true }
-anyhow = "1.0.81"
-clap = { version = "4.5.4", features = ["derive"], optional = true}
-serde = { version = "1", features = ["derive"], optional = true }
-serde_json = { version = "1", optional = true }
+pyo3 = { version = "0.29.2", optional = true }
+anyhow = "1.0.104"
+clap = { version = "4.6.6", features = ["derive"], optional = true}
+serde = { version = "1.0.229", features = ["derive"], optional = true }
+serde_json = { version = "1.0.151", optional = true }
 num-bigint = "0.4"
-num-complex = "0.4"
-num-traits = "0.2"
+num-complex = "0.4.6"
+num-traits = "0.2.19"
 qsc = { git = "https://github.com/microsoft/qdk.git", tag = "v1.32.0" }
 resource_estimator = { git = "https://github.com/microsoft/qdk.git", tag = "v1.32.0" }
 num-format = "0.4.4"

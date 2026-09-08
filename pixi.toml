@@ -6,15 +6,15 @@ platforms = ["osx-arm64","win-64", "linux-64", "linux-aarch64"]
 dev = ["dev"]
 
 [dependencies]
-graphviz = ">=13.1.2,<14"
+graphviz = ">=14.1.2,<15"
 python = ">=3.13,<3.14"
 maturin = ">=1.13.3,<2"
 numba = ">=0.63.1"
 rust = ">=1.98.0,<1.99"
 
 [feature.dev.dependencies]
-ruff = "==0.16.5"
-ty = "==0.0.78"
+ruff = "==0.16.6"
+ty = "==0.0.79"
 
 [pypi-dependencies]
 anb-estimator = { path = ".", editable = true }
