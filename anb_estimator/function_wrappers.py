@@ -1,19 +1,23 @@
-from math import floor
+from typing import NamedTuple
 from warnings import warn
 
 from qualtran import Bloq
 
 from anb_estimator._native import (  # ty: ignore[unresolved-import]
+    FullResults,
+    LogicalCounts,
     _estimate_logical_counts,
     _estimate_qsharp_file,
 )
-from anb_estimator.dataclass_wrappers import (
-    ErrorBudget,
-    Estimates,
-    FullResults,
-    LogicalCounts,
-)
 from anb_estimator.qualtran_interface import count_resources
+
+
+class ErrorBudget(NamedTuple):
+    """Failure probabilities for one error-budget allocation"""
+
+    p_logical_error: float  # proba of >= 1 logical error
+    p_faulty_magic_state_distillation: float  # proba of >= 1 faulty magic state distillation
+    p_failed_rotation_synthesis: float  # proba of >= 1 failed rotation synthesis
 
 
 def _check_error_inputs(error_total: float | None, error_budget: ErrorBudget | None) -> None:
@@ -43,22 +47,14 @@ ARBITRARY_CIRCUIT_WARN = (
 )
 
 
-def _format_logical_counts_input(logical_counts: LogicalCounts) -> LogicalCounts:
+def _check_logical_counts(logical_counts: LogicalCounts) -> LogicalCounts:
     """
-    Make sure that the logical counts are valid (non-negative integers) and convert them to integers if they are given as floats representing integers (e.g., 3.0).
-    in: LogicalCounts with potentially non-integer or negative values
-    out: LogicalCounts with non-negativeinteger values, or raises ValueError if the input is invalid
+    Ensure the logical counts are usable for Toffoli-factory estimation.
+
+    `LogicalCounts` itself already guarantees non-negative integer fields
+    (its constructor validates that); this only checks the additional
+    business constraints that this specific estimation needs.
     """
-
-    def _to_uint(k: str, val: float) -> int:
-        if val < 0:
-            raise ValueError(f"{k} must be >= 0")
-        if val != floor(val):
-            raise ValueError(
-                f"{k} must be an integer or a float representing an integer (e.g., 3.0)"
-            )
-        return floor(val)
-
     if logical_counts.qubit_count == 0:
         raise ValueError("The number of qubits must be > 0")
     if logical_counts.ccx_count == 0:
@@ -66,7 +62,7 @@ def _format_logical_counts_input(logical_counts: LogicalCounts) -> LogicalCounts
             "The number of CCX gates must be > 0"
         )  # Rust panics if the number of factories is 0.
 
-    return LogicalCounts(**{k: _to_uint(k, v) for k, v in logical_counts.as_dict().items()})
+    return logical_counts
 
 
 def estimate_logical_counts(
@@ -76,7 +72,7 @@ def estimate_logical_counts(
     error_budget: ErrorBudget | None = None,
 ) -> FullResults:
     """
-    Runs the estimation based on logical counts and returns the results as an Estimates class.
+    Runs the estimation based on logical counts and returns the results as a FullResults dataclass.
 
     Args:
         logical_counts (LogicalCounts): Logical counts of the circuit consisting of::
@@ -92,14 +88,14 @@ def estimate_logical_counts(
         FullResults: The estimation results as an FullResults dataclass.
     """
     # --- validate inputs ---
-    _safe_counts = _format_logical_counts_input(logical_counts)
+    _safe_counts = _check_logical_counts(logical_counts)
 
     if not isinstance(frontier, bool):
         raise TypeError("frontier must be a boolean")
 
     _check_error_inputs(error_total, error_budget)
 
-    estimate, frontier_data = _estimate_logical_counts(
+    return _estimate_logical_counts(
         _safe_counts.qubit_count,
         _safe_counts.cx_count,
         _safe_counts.ccx_count,
@@ -107,10 +103,6 @@ def estimate_logical_counts(
         error_total=error_total,
         error_budget=error_budget,
     )
-
-    frontier_converted = [Estimates.from_rust(e) for e in frontier_data] if frontier else None
-
-    return FullResults(Estimates.from_rust(estimate), frontier_converted, _safe_counts)
 
 
 def estimate_from_qualtran(
@@ -120,7 +112,7 @@ def estimate_from_qualtran(
     error_budget: ErrorBudget | None = None,
 ) -> FullResults:
     """
-    Runs the Qualtran estimation and returns the results as an EstimatesPy class.
+    Runs the Qualtran estimation and returns the results as a FullResults dataclass.
 
     Args:
         bloq (Bloq): The Bloq to be estimated.
@@ -181,11 +173,6 @@ def estimate_qsharp_file(
 
     _check_error_inputs(error_total, error_budget)
 
-    estimate, frontier_data, counts = _estimate_qsharp_file(
+    return _estimate_qsharp_file(
         file_path, frontier=frontier, error_total=error_total, error_budget=error_budget
     )
-    counts_converted = LogicalCounts.from_rust(counts)
-
-    frontier_converted = [Estimates.from_rust(e) for e in frontier_data] if frontier else None
-
-    return FullResults(Estimates.from_rust(estimate), frontier_converted, counts_converted)
