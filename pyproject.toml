@@ -1,5 +1,15 @@
 [project]
 name = "anb-estimator"
+description = "Resource estimator for quantum algorithms on Alice & Bob's cat-qubit architecture"
+readme = "README.md"
+authors = [
+    { name = "Mathias Soeken", email = "mathias.soeken@microsoft.com" },
+    { name = "Élie Gouzien", email = "elie.gouzien@alice-bob.com" },
+    { name = "Nicholas Gialouris", email = "nicholas.gialouris@alice-bob.com" },
+    { name = "Axel Pappalardo", email = "axel.pappalardo@alice-bob.com" },
+    { name = "Adel Ben Moussa", email = "adel.ben-moussa@alice-bob.com" },
+    { name = "Mattéo Pappalardo", email = "matteo.pappalardo@alice-bob.com" },
+]
 license = "MIT"
 requires-python = ">=3.13,<3.14"
 classifiers = [
@@ -9,6 +19,10 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = ["qualtran>=0.7.0"]
+
+[project.urls]
+Repository = "https://github.com/Alice-Bob-SW/anb-estimator"
+"Alice & Bob" = "https://alice-bob.com"
 
 [project.scripts]
 anb-estimator = "anb_estimator.__main__:main"
