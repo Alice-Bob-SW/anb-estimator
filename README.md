@@ -6,30 +6,66 @@ This project estimates the amount of physical resources required to run quantum 
 
 The current version of the code specifically targets Shor's algorithm for solving the elliptic curve discrete logarithm problem and its subroutines. It improves the [python project](https://github.com/ElieGouzien/elliptic_log_cat) from which the results of the paper [Phys. Rev. Lett. 131, 040602](https://dx.doi.org/10.1103/PhysRevLett.131.040602) ([arXiv: 2302.06639](https://arxiv.org/abs/2302.06639)) originate.
 
-The project consists of a Rust package containing a binary crate and a library crate as well as a Python API.
+Big thanks to Mathias Soeken for the initial repository and for rebuilding the [Microsoft Q# resource estimator](https://github.com/microsoft/qdk/tree/main/source/resource_estimator) to support our architecture.
 
-Big thanks to Mathias Soeken for the initial repository and for rebuilding the [Microsoft Q# resource estimator](https://github.com/microsoft/qdk/tree/main/source/resource_estimator) (in its version [1.6](https://github.com/microsoft/qdk/releases?page=3#release-v1.6.0) at the moment) to support our architecture.
+This project mixes Rust and Python because the Q# resource estimator (QDK) is written in Rust, and we also want to support Qualtran, which is Python-only.
 
-## Installation
+## Python: CLI and library
 
-Two paths are possible.
-### Cargo installation (Rust library and CLI only)
+```bash
+pip install anb-estimator
+```
 
-This is a standard Cargo crate.
+This installs the `anb-estimator` CLI and the `anb_estimator` library. No Rust toolchain needed.
 
-Install Rust and the associated build toolchain for your operating system (Xcode Command Line Tools on macOS, build-essential on Linux, or Microsoft C++ Build Tools on Windows), see [Installation - The Rust Programming Language](https://doc.rust-lang.org/book/ch01-01-installation.html).
-`cargo build --release` will then do its magic and build the estimator. The executable files are also available from the CI artifacts.
+### CLI
 
-### Pixi installation (Rust library, CLI and Python API)
+`anb-estimator [OPTIONS] <COMMAND>`. Run `anb-estimator help` for the full reference.
 
-To run the setup commands, it is recommended to have Pixi installed on your machine, which can be done by following the installation guide [here](https://pixi.prefix.dev/latest/installation/).
-Indeed, this repository includes a `pixi.toml` for reproducible environments, so that the command
+**Commands:**
+- `resources <qubits> <cx> <ccx>`: pass the pre-layout logical resource cost directly.
+- `file <path-to-qsharp-file>`: read it from a Q# file.
+
+**Global options** (must appear before the command):
+- `-f` or `--frontier`: print a frontier of good parameter sets instead of a single estimate.
+- `--json <file>`: also write the computed estimate(s) as JSON to `<file>` (a single object, or an array with `--frontier`).
+- `--error-budget <topological> <magic> <rotation>`: detailed error split into 3 components.
+- `--error-total <value>`: overall error budget, equivalent to `--error-budget <value>/2 <value>/2 0`. Default `0.333`.
+
+Use either `--error-total` or `--error-budget`, not both.
+
+**Examples:**
+- `anb-estimator resources 40 10 10`
+- `anb-estimator --frontier file qsharp/Adder.qs`
+- `anb-estimator --json estimate.json resources 40 10 10`
+
+### Library
+
+```python
+from anb_estimator import estimate_logical_counts, estimate_qsharp_file, estimate_from_qualtran
+```
+
+`estimate_from_qualtran` takes a Qualtran `Bloq`, `estimate_qsharp_file` a Q# file, and `estimate_logical_counts` explicit `(qubits, cx, ccx)`. See [Program description](#program-description) for details on these three input forms.
+
+## Rust crate
+
+This is a standard Cargo crate, and where the CLI actually lives. `cargo build --release` builds the library and the `anb_estimator_cli` binary. The `anb-estimator` Python command above is just a thin wrapper around this same code, with the same commands and options. Use it directly with `cargo run --` (while developing) or `anb_estimator_cli` (once built), in place of `anb-estimator`.
+
+The crate can also be used as a library in any Rust project. `examples/elliptic_log.rs` and `examples/from_qsharp.rs` show two ways to call it directly:
+- `cargo run --example=elliptic_log`: resources for the elliptic curve discrete logarithm problem (bit size 256, window size 18), as in [arXiv:2302.06639](https://arxiv.org/abs/2302.06639).
+- `cargo run --example=from_qsharp`: equivalent to `cargo run -- --error-budget 0.0005 0.0005 0.0 file qsharp/Adder.qs`.
+
+## Working on this repo (Pixi)
+
+Install [Pixi](https://pixi.prefix.dev/latest/installation/), then run:
+
 ```bash
 pixi install
 ```
-will create and manage the project environment for you, including installing Python, Rust, and any required dependencies defined in the project configuration. In addition, you’ll need a working native build toolchain for your operating system (Xcode Command Line Tools on macOS, build-essential on Linux, or Microsoft C++ Build Tools on Windows) in order to compile the Rust library behind both the CLI and the Python API, see [Installation - The Rust Programming Language](https://doc.rust-lang.org/book/ch01-01-installation.html).
 
-In order to connect its Rust logic to Python, the project relies on [PyO3/maturin](https://github.com/pyo3/maturin). `pixi install` builds the python interface and installs it in the environment as an editable package, so no separate build step is needed. To rebuild after changing the Rust code, run `pixi install` again (or `pixi run maturin develop` for a quicker incremental build without going through the full dependency resolution).
+This sets up Rust, Python, and the Python bindings, built with [maturin](https://github.com/pyo3/maturin) and installed editable. After changing Rust code, rerun `pixi install` (or `pixi run maturin develop` for a faster incremental rebuild).
+
+Run scripts with `pixi run python script-name`. For the walkthrough notebook (`examples/getting_started.ipynb`), use `pixi run jupyter notebook`: on Windows, `anb_estimator` may fail to import in the notebook if it isn't launched this way.
 
 ## Program description
 
@@ -66,52 +102,6 @@ The pre-layout logical resource cost input `(qubits, cx, ccx)` can be provided i
 3. **Explicit resources**: you pass `(qubits, cx, ccx)` directly
 
 Note that **a few specific simplifying assumptions are performed** in the estimation of arbitrary Q# or Qualtran code. In particular, one-qubit gates are assumed to cost nothing compared to controlled gates and each CZ gate is exactly worth one CNOT gate, see [below](#supported-gates-and-their-costs) for more information.
-
-## Usage
-
-This mixed Rust/Python project is structured according to the recommendations from [Project Layout - Maturin User Guide](https://www.maturin.rs/project_layout.html).
-
-### CLI Usage (Rust)
-This Rust crate is designed as a library and also contains a standalone executable that estimates resources from either a Q# file or from the direct data of `(qubits, cx, ccx)`.
-Use the subcommand `help` to have the documentation of the executable.
-
-Basic form is either (depending if you are still developing or if you installed the executable):
-* `cargo run -- [OPTIONS] <COMMAND>`
-* `anb_estimator_cli [OPTIONS] <COMMAND>`
-
-**Commands:**
-- `resources <qubits> <cx> <ccx>` — directly passes the pre-layout logical resource cost.
-- `file <path-to-qsharp-file>` — reads a Q# file.
-
-**Global options** (must appear before the command):
-- `-f` or `--frontier` — prints a frontier of good parameter sets instead of a single estimate.
-- `--json <file>` — also writes the computed estimate(s) as JSON to `<file>` (a single object, or an array when combined with `--frontier`).
-- `--error-budget <topological> <magic> <rotation>` — detailed split into 3 components.
-- `--error-total <value>` — overall error budget. Equivalent to using `--error-budget <value>/2 <value>/2 0`. Default value is `<value> = 0.333`.
-
-**Important constraint:** you can use either `--error-total` or `--error-budget`, not both.
-
-**Examples:**
-- From explicit resources: `cargo run -- resources 40 10 10`
-- Frontier mode with a file: `cargo run -- --frontier file qsharp/Adder.qs`
-- Writing the estimate to a JSON file: `cargo run -- --json estimate.json resources 40 10 10`
-
-Two example files can be executed:
-- `cargo run --example=elliptic_log` uses as input the (pre-layout logical) resources required to run the elliptic curve discrete logarithm problem with bit size 256 and window size 18, as computed in [arXiv:2302.06639](https://arxiv.org/abs/2302.06639)
-- `cargo run --example=from_qsharp` is equivalent to `cargo run -- --error-budget 0.0005 0.0005 0.0 file qsharp/Adder.qs`.
-
-### Python Usage
-
-In order to be able to use `import anb_estimator` from python scripts in the repository, it is recommended to run them via
-```bash
-pixi run python script-name
-```
-
-For an end-to-end walkthrough, see the notebook `examples/getting_started.ipynb` via
-```bash
-pixi run jupyter notebook
-```
-(This should run on VSCode as well, but an issue has been reported on Windows platform where it was impossible to import `anb_estimator` if the notebook was not run via the above command.)
 
 ## Supported gates and their costs
 
@@ -162,3 +152,5 @@ For further reading:
 - Élie Gouzien
 - Nicholas Gialouris
 - Axel Pappalardo
+- Adel Ben Moussa
+- Mattéo Pappalardo

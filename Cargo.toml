@@ -4,7 +4,7 @@ version = "0.3.0"
 edition = "2024"
 description = "A resource estimator for running quantum algorithms on Alice and Bob's hardware."
 license = "MIT"
-readme = "Readme.md"
+readme = "README.md"
 keywords = ["quantum", "qsharp", "resource-estimation"]
 categories = ["science"]
 

@@ -43,7 +43,7 @@ def _check_error_inputs(error_total: float | None, error_budget: ErrorBudget | N
 
 
 ARBITRARY_CIRCUIT_WARN = (
-    "You should have a look at the Readme.md for assumptions on the costs of physical gates."
+    "You should have a look at the README.md for assumptions on the costs of physical gates."
 )
 
 
