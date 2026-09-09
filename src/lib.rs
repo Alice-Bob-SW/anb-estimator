@@ -59,6 +59,9 @@ pub mod estimates;
 pub mod factories;
 pub mod qubit;
 
+#[cfg(feature = "cli")]
+pub mod cli;
+
 // Only compile the Python module when the "python" feature is enabled.
 #[cfg(feature = "python")]
 mod python;

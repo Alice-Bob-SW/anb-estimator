@@ -258,6 +258,21 @@ impl EstimatesReport {
     }
 }
 
+/// Runs the command-line interface against an explicit argument list.
+///
+/// `args` must start with a program name, as in `sys.argv`. Backs the
+/// `anb-estimator` console script installed alongside the Python package, so
+/// the CLI ships without a second compiled binary. Takes `sys.argv` from the
+/// Python side rather than reading the process' `argv` directly, since the
+/// two can differ once Python re-execs a script through its interpreter.
+///
+/// # Errors
+/// Propagates any CLI failure as a Python `RuntimeError`.
+#[pyfunction]
+fn _cli_main(args: Vec<String>) -> PyResult<()> {
+    crate::cli::run(args).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
 /// Python module entry point for the Alice & Bob Q# resource estimator bindings.
 ///
 /// Registers user-facing functions that load Q# programs, accept explicit logical counts,
@@ -266,6 +281,7 @@ impl EstimatesReport {
 /// # Exposed callables
 /// - `_estimate_qsharp_file(...)`
 /// - `_estimate_logical_counts(...)`
+/// - `_cli_main()`
 ///
 /// # Errors
 /// Any initialization failure is surfaced as a Python `RuntimeError`.
@@ -275,6 +291,7 @@ fn anb_estimator(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // functions
     m.add_function(wrap_pyfunction!(_estimate_qsharp_file, m)?)?;
     m.add_function(wrap_pyfunction!(_estimate_logical_counts, m)?)?;
+    m.add_function(wrap_pyfunction!(_cli_main, m)?)?;
 
     // classes
     m.add_class::<EstimatesReport>()?;

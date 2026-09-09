@@ -20,7 +20,7 @@ required-features = ["cli"]
 
 [features]
 default = ['cli']
-python = ["dep:pyo3", "pyo3/extension-module", "dep:serde", "dep:serde_json"]
+python = ["dep:pyo3", "pyo3/extension-module", "dep:serde", "dep:serde_json", "cli"]
 cli = ["dep:clap", "dep:serde", "dep:serde_json"]
 
 

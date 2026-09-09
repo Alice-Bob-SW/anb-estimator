@@ -10,6 +10,9 @@ classifiers = [
 dynamic = ["version"]
 dependencies = ["qualtran>=0.7.0"]
 
+[project.scripts]
+anb-estimator = "anb_estimator.__main__:main"
+
 [build-system]
 requires = ["maturin>=1.8,<2.0"]
 build-backend = "maturin"
