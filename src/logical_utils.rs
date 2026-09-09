@@ -90,12 +90,11 @@ pub fn power_atspump(k2: f64, hw: &mut Hardware, macro_flag: bool) -> f64 {
 /// Durations of the composite measurement step:
 /// `[T_halfZ, T_holo, T_FIZZ]`
 #[must_use]
-pub fn duration_meas(k2: f64, ez: f64, hw: &Hardware) -> [f64; 4] {
-    let t_half_z = 2.0 * t_z_gate(hw.alpha, ez) / 2.0; // Factor 2 because of reset
-    let t_h = 2.0 * t_holo(hw.alpha, k2, TG2_HOLO); //Factor 2 because of reset
+pub fn duration_meas(k2: f64, ez: f64, hw: &Hardware) -> [f64; 3] {
+    let t_half_z = t_z_gate(hw.alpha, ez) / 2.0;
+    let t_h = t_holo(hw.alpha, k2, TG2_HOLO);
     let t_f = t_fizz(hw.alpha, k2, TG2_FIZZ);
-    let t_restab: f64 = 0.4 * 1.0 / k2;
-    [t_half_z, t_h, t_f, t_restab]
+    [t_half_z, t_h, t_f]
 }
 
 /// Total durations for one repetition-code cycle:
@@ -108,7 +107,7 @@ pub fn duration_cycle(k2: f64, hw: &mut Hardware) -> [f64; 4] {
     let gcnot = drive_opt(hw, hw.alpha, k2, crate::gates::DriveInteraction::Cnot);
 
     let t_meas = duration_meas(k2, ez, hw).iter().sum::<f64>();
-    let t_prep = 0.4 * 1.0 / k2;
+    let t_prep = 1.0 / k2;
     let t_cnot = t_cnot(hw.alpha, gcnot);
     let t_cycle = t_prep + 2.0 * t_cnot + t_meas;
 
@@ -121,40 +120,24 @@ pub fn duration_cycle(k2: f64, hw: &mut Hardware) -> [f64; 4] {
 // ---------------------------------------------------------------------
 
 /// Energies of the measurement substeps: `[E_halfZ, E_holo, E_FIZZ]`
-pub fn e_meas(k2: f64, hw: &mut Hardware, macro_flag: bool) -> [f64; 4] {
+pub fn e_meas(k2: f64, hw: &mut Hardware, macro_flag: bool) -> [f64; 3] {
     // Baseline regime: adiabatic elimination k_b = margin * k2
     let old_k_b = hw.k_b;
     hw.k_b = DEFAULT_MARGIN * k2;
 
-    // Drives/energies (computed with adiabatic k_b, matching Python)
     let ed = e_d(hw, hw.alpha, k2);
     let ez = drive_opt(hw, hw.alpha, k2, crate::gates::DriveInteraction::Z);
     let e_holo_val = e_holo(hw.alpha, k2);
     let e_m_val = e_m(hw.alpha, k2);
 
-    // Powers (adiabatic k_b)
     let p_half_z = p_z_gate(hw, ed, ez, k2, macro_flag);
     let p_holo = p_pump(hw, k2, macro_flag) + p_buffer_drive(hw, e_holo_val, macro_flag);
-
-    // IMPORTANT: compute restab BEFORE switching k_b for FIZZ (matches your Python)
-    let p_restab = power_stab(k2, hw, macro_flag);
-
-    // FIZZ: temporarily override k_b ONLY for this power computation
-    let kb_saved = hw.k_b; // currently adiabatic (margin*k2)
-    hw.k_b = 2.0 * hw.alpha * k2.sqrt();
     let p_fizz = p_z_gate(hw, ed, e_m_val, k2, macro_flag);
-    hw.k_b = kb_saved; // restore adiabatic k_b
 
-    // Durations (same as before)
-    let [t_half_z, t_h, t_f, t_restab] = duration_meas(k2, ez, hw);
+    let [t_half_z, t_h, t_f] = duration_meas(k2, ez, hw);
 
     hw.k_b = old_k_b;
-    [
-        p_half_z * t_half_z,
-        p_holo * t_h,
-        p_fizz * t_f,
-        p_restab * t_restab,
-    ]
+    [p_half_z * t_half_z, p_holo * t_h, p_fizz * t_f]
 }
 
 /// Energy of one CNOT gate.

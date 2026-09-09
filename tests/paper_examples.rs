@@ -96,18 +96,25 @@ fn ecdlp_256_bit_matches_paper_at_its_own_parameters() {
 /// Mirrors `examples/from_qsharp.rs` (ripple-carry adder from
 /// `qsharp/Adder.qs`). Locks today's computed values; the paper does not
 /// cover ripple-carry adders.
+///
+/// These values moved when the repetition-code cycle time switched from a
+/// fixed 500ns/round placeholder to the drive-optimized cat-qubit gate-time
+/// model in `logical_utils`/`hardware`: cycles got much shorter, so more
+/// Toffoli factories are needed in parallel to keep up with magic-state
+/// demand, which is why `factories` and `physical_qubits` are higher here
+/// than in the pre-energy-optimization baseline.
 fn ripple_carry_adder_from_qsharp_is_stable() {
     let filename = format!("{}/qsharp/Adder.qs", env!("CARGO_MANIFEST_DIR"));
     let count = LogicalCounts::from_qsharp(filename).expect("should read Q# file");
     let budget = ErrorBudget::new(0.001 * 0.5, 0.001 * 0.5, 0.0);
     let report = estimate(count, budget);
 
-    assert_eq!(report.physical_qubits, 13_419);
+    assert_eq!(report.physical_qubits, 22_794);
     assert_eq!(report.code_distance, 9);
-    assert!((report.code_alpha2 - 14.0).abs() < 1e-9);
-    assert_eq!(report.factories, 2);
+    assert!((report.code_alpha2 - 28.0).abs() < 1e-9);
+    assert_eq!(report.factories, 127);
     assert_eq!(report.factories_distance, 5);
     assert!((report.factories_alpha2 - 8.18).abs() < 1e-9);
-    assert_close(report.total_error, 0.000_193_407_374_140_844_32, 1e-9);
-    assert_close(report.runtime_seconds, 0.013_297_5, 1e-6);
+    assert_close(report.total_error, 0.000_574_629_043_247_536_74, 1e-9);
+    assert_close(report.runtime_seconds, 0.000_159_659, 1e-6);
 }

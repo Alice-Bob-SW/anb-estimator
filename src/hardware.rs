@@ -386,7 +386,7 @@ impl Default for Hardware {
     fn default() -> Self {
         Self {
             // Dissipation/linewidths (angular units)
-            k_1: 100.0,
+            k_1: 6.97 * KHZ,
             k_b: 24.0 * MHZ,
             k_phi: 0.08 * MHZ,
             k_ext: 400.0 * TWOPI, // 400 Hz in angular units (adjust if you have a Hz unit)
