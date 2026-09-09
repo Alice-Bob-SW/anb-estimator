@@ -20,6 +20,8 @@ use crate::{
     code::{CodeParameter, RepetitionCode},
     counter::LogicalCounts,
     factories::{ToffoliBuilder, ToffoliFactory},
+    hardware::Hardware,
+    logical_utils,
     qubit::CatQubit,
 };
 
@@ -27,6 +29,12 @@ use crate::{
 pub struct AliceAndBobEstimates(PhysicalResourceEstimationResult<RepetitionCode, ToffoliFactory>);
 
 impl AliceAndBobEstimates {
+    /// Optimized κ₁/κ₂ used in the logical code.
+    #[must_use]
+    pub fn code_k1_k2(&self) -> f64 {
+        self.logical_patch().code_parameter().k1_k2
+    }
+
     #[must_use]
     /// Give a reference to the [`FactoryPart`] used in the estimate.
     pub fn toffoli_factory_part(&self) -> Option<&FactoryPart<ToffoliFactory>> {
@@ -132,6 +140,123 @@ impl AliceAndBobEstimates {
         )?
         .into())
     }
+
+    /// Code distance of the logical patch.
+    #[must_use]
+    pub fn code_distance(&self) -> u64 {
+        self.logical_patch().code_parameter().distance
+    }
+
+    /// Number of Toffoli factory copies.
+    #[must_use]
+    pub fn factories(&self) -> u64 {
+        self.toffoli_factory_part()
+            .map_or(0, resource_estimator::estimates::FactoryPart::copies)
+    }
+
+    /// Factory code distance.
+    #[must_use]
+    pub fn factories_distance(&self) -> u64 {
+        self.toffoli_factory_part()
+            .expect("No factory part")
+            .factory()
+            .code_parameter
+            .distance
+    }
+
+    /// Average number of photons |α|² in each cat qubit.
+    #[must_use]
+    pub fn code_alpha2(&self) -> f64 {
+        self.logical_patch().code_parameter().alpha_sq
+    }
+
+    /// Average number of photons |α|² in each cat qubit used in factories.
+    #[must_use]
+    pub fn factories_alpha2(&self) -> f64 {
+        self.toffoli_factory_part()
+            .expect("No factory part")
+            .factory()
+            .code_parameter
+            .alpha_sq
+    }
+
+    /// Energy of logical patches only
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn total_energy_joules_patches(&self, macro_flag: bool) -> f64 {
+        let num_rounds = self
+            .num_cycles()
+            .to_usize()
+            .expect("num_cycles doesn't fit in usize");
+        let dist = self.code_distance() as usize;
+        let alpha_sq = self.code_alpha2();
+        let alpha = alpha_sq.sqrt();
+
+        // Use the optimized κ₁/κ₂ from the code parameter
+        let k1_on_k2 = self.code_k1_k2();
+
+        let mut hw = Hardware {
+            alpha,
+            ..Hardware::default()
+        };
+
+        let e_per_patch = logical_utils::e_tot(k1_on_k2, &mut hw, dist, num_rounds, macro_flag);
+
+        let n_patches = self
+            .layout_overhead()
+            .logical_qubits()
+            .to_f64()
+            .expect("can't convert logical_qubits to f64");
+
+        e_per_patch * n_patches
+    }
+
+    /// Energy of Toffoli factories (crude approximation)
+    #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss
+    )]
+    pub fn total_energy_joules_factories(&self, macro_flag: bool) -> f64 {
+        // FXIME?: factories use the default k1/k2 (1e-5), not the
+        // code's optimized one. The factory tables were precomputed at 1e-5.
+        let k1_on_k2 = CatQubit::new().k1_k2;
+
+        // Factory code parameters (distance, |α|²)
+        let dist_f = self.factories_distance() as usize;
+        let alpha_sq_f = self.factories_alpha2();
+        let alpha_f = alpha_sq_f.sqrt();
+
+        let mut hw_f = Hardware {
+            alpha: alpha_f,
+            ..Hardware::default()
+        };
+        let k2_f = hw_f.k_1 / k1_on_k2;
+        let [_t_prep, _t_cnot, _t_meas, t_cycle_cell_s] =
+            logical_utils::duration_cycle(k2_f, &mut hw_f);
+        let t_cycle_factory_ns = (t_cycle_cell_s * 1e9).round() as u64;
+        let runtime_ns = self.runtime(); // ns total wall-clock runtime
+        // rounds factories run to cover runtime
+        let num_rounds_factory =
+            ((runtime_ns as f64) / (t_cycle_factory_ns as f64)).ceil() as usize;
+
+        // Energy for one factory patch over `num_rounds`
+        let e_per_factory_patch =
+            logical_utils::e_tot(k1_on_k2, &mut hw_f, dist_f, num_rounds_factory, macro_flag);
+
+        // Number of factory logical qubits
+        let copies = 4.0 * self.factories() as f64;
+
+        copies * e_per_factory_patch
+    }
+
+    /// Total energy = patches + factories
+    #[must_use]
+    pub fn total_energy_joules(&self, macro_flag: bool) -> f64 {
+        self.total_energy_joules_patches(macro_flag)
+            + self.total_energy_joules_factories(macro_flag)
+    }
 }
 
 impl Deref for AliceAndBobEstimates {
@@ -165,11 +290,15 @@ pub struct EstimatesReport {
     pub runtime_hours: f64,
     /// Total error probability of the computation.
     pub total_error: f64,
+    /// Total energy consumption of the computation, in joules.
+    pub total_energy_joules: f64,
 
     /// Code distance of the logical patch.
     pub code_distance: u64,
     /// Average number of photons |α|² in each cat qubit of the logical patch.
     pub code_alpha2: f64,
+    /// Ratio κ₁/κ₂ used by the logical patch.
+    pub code_k1_k2: f64,
 
     /// Number of Toffoli factory copies.
     pub factories: u64,
@@ -196,8 +325,10 @@ impl From<&AliceAndBobEstimates> for EstimatesReport {
             runtime_seconds: f64::from_u64(e.runtime()).expect("runtime is too large") / 1e9,
             runtime_hours: f64::from_u64(e.runtime()).expect("runtime is too large") / 1e9 / 3600.0,
             total_error: e.total_error(),
+            total_energy_joules: e.total_energy_joules(true),
             code_distance: code_parameter.distance,
             code_alpha2: code_parameter.alpha_sq,
+            code_k1_k2: code_parameter.k1_k2,
             factories: factory_part.copies(),
             factories_distance: factory.code_parameter.distance,
             factories_alpha2: factory.code_parameter.alpha_sq,
@@ -216,6 +347,7 @@ impl Display for EstimatesReport {
         writeln!(f, "# physical qubits:    {}", self.physical_qubits)?;
         writeln!(f, "runtime:             {:.2} hrs", self.runtime_hours)?;
         writeln!(f, "total error:         {:.5}", self.total_error)?;
+        writeln!(f, "total energy:        {:.2} J", self.total_energy_joules)?;
         writeln!(f, "─────────────────────────────")?;
         writeln!(
             f,
@@ -228,6 +360,8 @@ impl Display for EstimatesReport {
             "factories distance:  {} (|ɑ|² = {})",
             self.factories_distance, self.factories_alpha2
         )?;
+        writeln!(f, "κ₁/κ₂ (code):        {:.3e}", self.code_k1_k2)?;
+
         writeln!(
             f,
             "factory fraction:    {:.2}%",

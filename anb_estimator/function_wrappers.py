@@ -6,6 +6,7 @@ from qualtran import Bloq
 from anb_estimator._native import (  # ty: ignore[unresolved-import]
     FullResults,
     LogicalCounts,
+    _estimate_ecc_example,
     _estimate_logical_counts,
     _estimate_qsharp_file,
 )
@@ -42,6 +43,21 @@ def _check_error_inputs(error_total: float | None, error_budget: ErrorBudget | N
             raise ValueError("error_budget entries must be between 0 and 1")
 
 
+def _check_k1_k2_inputs(k1_k2: float | None, k1_k2_values: list[float] | None) -> None:
+    """
+    Ensure that at most one of `k1_k2` or `k1_k2_values` is set, and that the value(s) are finite and > 0.
+    """
+    if k1_k2 is not None and k1_k2_values is not None:
+        raise ValueError("Provide at most one of: k1_k2, k1_k2_values")
+    if k1_k2 is not None and not k1_k2 > 0:
+        raise ValueError("k1_k2 must be > 0")
+    if k1_k2_values is not None:
+        if len(k1_k2_values) == 0:
+            raise ValueError("k1_k2_values must be non-empty")
+        if not all(k > 0 for k in k1_k2_values):
+            raise ValueError("all k1_k2_values entries must be > 0")
+
+
 ARBITRARY_CIRCUIT_WARN = (
     "You should have a look at the README.md for assumptions on the costs of physical gates."
 )
@@ -68,8 +84,11 @@ def _check_logical_counts(logical_counts: LogicalCounts) -> LogicalCounts:
 def estimate_logical_counts(
     logical_counts: LogicalCounts,
     frontier: bool,
+    optimize_for_energy: bool = False,
     error_total: float | None = None,
     error_budget: ErrorBudget | None = None,
+    k1_k2: float | None = None,
+    k1_k2_values: list[float] | None = None,
 ) -> FullResults:
     """
     Runs the estimation based on logical counts and returns the results as a FullResults dataclass.
@@ -80,9 +99,13 @@ def estimate_logical_counts(
             cx_count (int): Logical CX-equivalent two-qubit gate count.
             ccx_count (int): Logical CCX (Toffoli) gate count.
         frontier (bool): If `true`, also return a list representing the frontier.
+        optimize_for_energy (bool): If `true`, optimize the code parameters for total energy
+            consumption instead of physical qubit count.
         error_total (float): Overall error target; mutually exclusive with `error_budget`.
         error_budget (Tuple): Tuple `(Proba of >= 1 logical error, Proba of >= 1 faulty magic state distillation,
                                 Proba of >= 1 failed rotation synthesis)` for an explicit split; mutually exclusive with "error_total".
+        k1_k2 (float): Optional fixed κ₁/κ₂ ratio to use (not optimized); mutually exclusive with `k1_k2_values`.
+        k1_k2_values (List[float]): Optional list of κ₁/κ₂ ratios to optimize over; mutually exclusive with `k1_k2`.
 
     Returns:
         FullResults: The estimation results as an FullResults dataclass.
@@ -94,22 +117,29 @@ def estimate_logical_counts(
         raise TypeError("frontier must be a boolean")
 
     _check_error_inputs(error_total, error_budget)
+    _check_k1_k2_inputs(k1_k2, k1_k2_values)
 
     return _estimate_logical_counts(
         _safe_counts.qubit_count,
         _safe_counts.cx_count,
         _safe_counts.ccx_count,
         frontier=frontier,
+        optimize_for_energy=optimize_for_energy,
         error_total=error_total,
         error_budget=error_budget,
+        k1_k2=k1_k2,
+        k1_k2_values=k1_k2_values,
     )
 
 
 def estimate_from_qualtran(
     bloq: Bloq,
     frontier: bool,
+    optimize_for_energy: bool = False,
     error_total: float | None = None,
     error_budget: ErrorBudget | None = None,
+    k1_k2: float | None = None,
+    k1_k2_values: list[float] | None = None,
 ) -> FullResults:
     """
     Runs the Qualtran estimation and returns the results as a FullResults dataclass.
@@ -117,9 +147,13 @@ def estimate_from_qualtran(
     Args:
         bloq (Bloq): The Bloq to be estimated.
         frontier (bool): If `true`, also return a list representing the frontier.
+        optimize_for_energy (bool): If `true`, optimize the code parameters for total energy
+            consumption instead of physical qubit count.
         error_total (float): Overall error target; mutually exclusive with `error_budget`.
         error_budget (Tuple): Tuple `(Proba of >= 1 logical error, Proba of >= 1 faulty magic state distillation,
                                 Proba of >= 1 failed rotation synthesis)` for an explicit split; mutually exclusive with "error_total".
+        k1_k2 (float): Optional fixed κ₁/κ₂ ratio to use (not optimized); mutually exclusive with `k1_k2_values`.
+        k1_k2_values (List[float]): Optional list of κ₁/κ₂ ratios to optimize over; mutually exclusive with `k1_k2`.
 
     Returns:
         FullResults: The estimation results as an FullResults dataclass.
@@ -137,15 +171,24 @@ def estimate_from_qualtran(
     warn(ARBITRARY_CIRCUIT_WARN)
 
     return estimate_logical_counts(
-        logical_count, frontier=frontier, error_total=error_total, error_budget=error_budget
+        logical_count,
+        frontier=frontier,
+        optimize_for_energy=optimize_for_energy,
+        error_total=error_total,
+        error_budget=error_budget,
+        k1_k2=k1_k2,
+        k1_k2_values=k1_k2_values,
     )
 
 
 def estimate_qsharp_file(
     file_path: str,
     frontier: bool,
+    optimize_for_energy: bool = False,
     error_total: float | None = None,
     error_budget: ErrorBudget | None = None,
+    k1_k2: float | None = None,
+    k1_k2_values: list[float] | None = None,
 ) -> FullResults:
     """
     Runs the estimation for a Q# file and returns the results as a dataclass.
@@ -153,9 +196,13 @@ def estimate_qsharp_file(
     Args:
         file_path (str): The path to the Q# file to be estimated.
         frontier (bool): If `true`, also compute a frontier of estimates (e.g., different distances/α).
+        optimize_for_energy (bool): If `true`, optimize the code parameters for total energy
+            consumption instead of physical qubit count.
         error_total (float): Overall error target; mutually exclusive with `error_budget`.
         error_budget (Tuple): Tuple `(Proba of >= 1 logical error, Proba of >= 1 faulty magic state distillation,
                                 Proba of >= 1 failed rotation synthesis)` for an explicit split; mutually exclusive with "error_total".
+        k1_k2 (float): Optional fixed κ₁/κ₂ ratio to use (not optimized); mutually exclusive with `k1_k2_values`.
+        k1_k2_values (List[float]): Optional list of κ₁/κ₂ ratios to optimize over; mutually exclusive with `k1_k2`.
 
     Returns:
         FullResults: The estimation results as an FullResults dataclass.
@@ -172,7 +219,37 @@ def estimate_qsharp_file(
     warn(ARBITRARY_CIRCUIT_WARN)
 
     _check_error_inputs(error_total, error_budget)
+    _check_k1_k2_inputs(k1_k2, k1_k2_values)
 
     return _estimate_qsharp_file(
-        file_path, frontier=frontier, error_total=error_total, error_budget=error_budget
+        file_path,
+        frontier=frontier,
+        optimize_for_energy=optimize_for_energy,
+        error_total=error_total,
+        error_budget=error_budget,
+        k1_k2=k1_k2,
+        k1_k2_values=k1_k2_values,
     )
+
+
+def estimate_ecc_example(bit_size: int, window_size: int, frontier: bool) -> FullResults:
+    """
+    Runs the estimation for the built-in elliptic-curve discrete log example and returns the
+    results as a FullResults dataclass.
+
+    Args:
+        bit_size (int): ECC modulus bit size.
+        window_size (int): Window size used by the example algorithm.
+        frontier (bool): If `true`, also return a list representing the Pareto frontier.
+
+    Returns:
+        FullResults: The estimation results as a FullResults dataclass.
+    """
+    if not isinstance(bit_size, int) or bit_size <= 0:
+        raise ValueError("bit_size must be a positive integer")
+    if not isinstance(window_size, int) or window_size <= 0:
+        raise ValueError("window_size must be a positive integer")
+    if not isinstance(frontier, bool):
+        raise TypeError("frontier must be a boolean")
+
+    return _estimate_ecc_example(bit_size, window_size, frontier=frontier)

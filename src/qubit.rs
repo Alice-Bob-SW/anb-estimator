@@ -31,4 +31,9 @@ impl CatQubit {
         // changing this.
         Self::default()
     }
+
+    /// Instantiation from an explicit κ₁/κ₂ value.
+    pub fn with_k1_k2(k1_k2: f64) -> Self {
+        Self { k1_k2 }
+    }
 }

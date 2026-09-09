@@ -27,8 +27,16 @@ struct Cli {
     #[arg(long, value_name = "FILE")]
     json: Option<PathBuf>,
 
+    /// Optimize the code parameters for total energy consumption instead of
+    /// physical qubit count.
+    #[arg(long)]
+    optimize_for_energy: bool,
+
     #[command(flatten)]
     budget: Budget,
+
+    #[command(flatten)]
+    k1_k2: K1K2Args,
 
     #[command(subcommand)]
     command: Commands,
@@ -45,6 +53,18 @@ struct Budget {
     /// Detailed error budget
     #[arg(long, num_args = 3, value_names = ["TOPOLOGICAL_ERROR", "MAGIC_ERROR", "ROTATION_ERROR"])]
     error_budget: Option<Vec<f64>>,
+}
+
+#[derive(Args)]
+#[group(required = false, multiple = false)]
+struct K1K2Args {
+    /// Fixed κ₁/κ₂ ratio to use (not optimized over) [default: 1e-5].
+    #[arg(long, value_name = "K1_K2")]
+    k1_k2: Option<f64>,
+
+    /// Comma-separated list of κ₁/κ₂ ratios to optimize over (e.g. "1e-6,1e-5,1e-4").
+    #[arg(long, value_delimiter = ',', value_name = "K1_K2,K1_K2,...")]
+    k1_k2_values: Option<Vec<f64>>,
 }
 
 #[derive(Subcommand)]
@@ -83,7 +103,13 @@ where
     let args = Cli::parse_from(args);
 
     let qubit = CatQubit::new();
-    let qec = RepetitionCode::new();
+    let mut qec = if args.optimize_for_energy {
+        RepetitionCode::new_energy_optimized()
+    } else {
+        RepetitionCode::new_qubit_optimized()
+    };
+    qec.configure_k1_k2(args.k1_k2.k1_k2, args.k1_k2.k1_k2_values)
+        .map_err(anyhow::Error::msg)?;
     let builder = ToffoliBuilder::default();
     let budget = make_budget(
         args.budget.error_total,
