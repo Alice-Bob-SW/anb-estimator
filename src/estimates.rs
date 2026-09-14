@@ -39,12 +39,20 @@ impl AliceAndBobEstimates {
         // "Vertical" routing qubits must be added to ensure all-to-all connectivity
         // Formula from arXiv: 2302.06639, p. 27. `logical_qubits()` include the "horizontal
         // routing qubits", including the one between the computation qubits and factories.
-        let additional_routing_qubits = 2
-            * ((3
-                * (self.layout_overhead().logical_qubits()
-                    + self.toffoli_factory_part().map_or(0, FactoryPart::copies) * 5))
-                - 1);
-        self.0.physical_qubits() + additional_routing_qubits
+        //
+        // The boundary patch between the factories and the main compute block must be
+        // wide enough for both sides to stay all-to-all connected, so it is sized to the
+        // larger of the two code distances. `boundary_correction` adds the qubits needed
+        // to widen the interface from the mismatch between the two distances.
+        let main_distance = self.logical_patch().code_parameter().distance;
+        let (copies, boundary_correction) = self.toffoli_factory_part().map_or((0, 0), |part| {
+            let factory_distance = part.factory().code_parameter.distance;
+            (part.copies(), 2 * factory_distance.abs_diff(main_distance))
+        });
+        let additional_routing_qubits =
+            2 * ((3 * (self.layout_overhead().logical_qubits() + copies * 5)) - 1);
+
+        self.0.physical_qubits() + additional_routing_qubits + boundary_correction
     }
 
     #[must_use]
