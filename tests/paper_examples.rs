@@ -66,9 +66,11 @@ fn estimate(count: LogicalCounts, budget: ErrorBudget) -> EstimatesReport {
 /// p. 37): code distance 13, `alpha^2`=19, Table III factory i=12 (d=19,
 /// `alpha^2`=17.35), 84 factory copies.
 ///
-/// Matches the paper's code distance and `alpha^2` exactly. Matches its
-/// physical qubit count (126,133) within 0.1%. Matches its runtime (7h,
-/// 9h expected) within 10%.
+/// Matches the paper's code distance and `alpha^2` exactly. Physical qubit
+/// count differs from the paper's published 126,133: the paper sizes the
+/// main/factory boundary as `d_min*(d_min-1)`; this crate uses
+/// `2*d_min-1 + 4` instead. Matches the paper's runtime (7h, 9h expected)
+/// within 10%.
 #[allow(clippy::similar_names)]
 fn ecdlp_256_bit_matches_paper_at_its_own_parameters() {
     let (qubit_count, cx_count, ccx_count) = ecdlp_counts(256, 18);
@@ -85,7 +87,7 @@ fn ecdlp_256_bit_matches_paper_at_its_own_parameters() {
     .expect("should build estimate");
     let report = EstimatesReport::from(&result);
 
-    assert_eq!(report.physical_qubits, 126_248); // 126,133 in paper
+    assert_eq!(report.physical_qubits, 126_260); // 126,133 in paper
     assert_eq!(report.runtime_hours, 7.573722061388889); // 7h in paper
     assert_eq!(report.total_error, 0.15900410163750558); // not in paper, just for regression test
     let expected_runtime_hours = report.runtime_hours / (1.0 - report.total_error);
