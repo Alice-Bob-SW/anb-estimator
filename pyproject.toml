@@ -11,14 +11,14 @@ authors = [
     { name = "Mattéo Pappalardo", email = "matteo.pappalardo@alice-bob.com" },
 ]
 license = "MIT"
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
-dependencies = ["qualtran>=0.7.0"]
+dependencies = ["qualtran>=0.4.0"]
 
 [project.urls]
 Repository = "https://github.com/Alice-Bob-SW/anb-estimator"
@@ -37,4 +37,4 @@ module-name = "anb_estimator._native"
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py311"

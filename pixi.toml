@@ -6,11 +6,11 @@ platforms = ["osx-arm64","win-64", "linux-64", "linux-aarch64"]
 dev = ["dev"]
 
 [dependencies]
-graphviz = ">=14.1.2,<15"
-python = ">=3.13,<3.14"
+graphviz = ">=14.1.2"
+python = ">=3.11,<3.12"
 maturin = ">=1.13.3,<2"
 numba = ">=0.63.1"
-rust = ">=1.98.0,<1.99"
+rust = ">=1.98.0"
 
 [tasks]
 fmt = "cargo fmt"
@@ -20,8 +20,8 @@ clippy = "cargo clippy -- -D warnings"
 test = "cargo test"
 
 [feature.dev.dependencies]
-ruff = "==0.16.6"
-ty = "==0.0.79"
+ruff = "==0.16.7"
+ty = "==0.0.81"
 
 [feature.dev.tasks]
 fmt-py = "ruff format anb_estimator"
