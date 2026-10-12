@@ -1,7 +1,8 @@
 //! Python bindings for the Alice & Bob Q# resource estimator.
-//! ! This module exposes functions to estimate quantum resources from Q# programs
-//! ! and explicit logical counts, returning structured results suitable for Python consumers.
-//! ! It leverages PyO3 to create Python-callable functions and classes.
+//!
+//! This module exposes functions to estimate quantum resources from Q# programs
+//! and explicit logical counts, returning structured results suitable for Python consumers.
+//! It uses `PyO3` to create Python-callable functions and classes.
 
 use num_traits::FromPrimitive;
 use pyo3::prelude::*; // brings Python, PyResult, PyModule, Bound, etc.

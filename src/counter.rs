@@ -10,7 +10,7 @@ use num_bigint::BigUint;
 use num_complex::Complex;
 use num_traits::ToPrimitive;
 use qsc::{
-    Backend, BackendResult, LanguageFeatures, SourceMap, TargetCapabilityFlags,
+    Backend, LanguageFeatures, SourceMap, TargetCapabilityFlags,
     interpret::{GenericReceiver, Interpreter},
 };
 use resource_estimator::estimates::{ErrorBudget, Overhead};
@@ -40,7 +40,6 @@ impl LogicalCounts {
     }
 
     /// Count the logical resources from a Q# file.
-    #[allow(clippy::default_trait_access)]
     pub fn from_qsharp(filename: impl AsRef<Path>) -> Result<Self, String> {
         let content = read_to_string(filename).map_err(|_| String::from("Cannot read filename"))?;
 
@@ -54,7 +53,6 @@ impl LogicalCounts {
             LanguageFeatures::default(),
             store,
             &[(std_id, None)],
-            Default::default(),
         )
         .map_err(|_| String::from("Cannot create interpreter"))?;
 
@@ -109,88 +107,71 @@ impl Overhead for LogicalCounts {
 }
 
 impl Backend for LogicalCounts {
-    fn ccx(&mut self, _ctl0: usize, _ctl1: usize, _q: usize) -> Result<(), String> {
+    type ResultType = bool;
+
+    fn ccx(&mut self, _ctl0: usize, _ctl1: usize, _q: usize) {
         self.ccx_count += 1;
-        Ok(())
     }
 
-    fn cx(&mut self, _ctl: usize, _q: usize) -> Result<(), String> {
+    fn cx(&mut self, _ctl: usize, _q: usize) {
         self.cx_count += 1;
-        Ok(())
     }
 
-    fn cy(&mut self, _ctl: usize, _q: usize) -> Result<(), String> {
+    fn cy(&mut self, _ctl: usize, _q: usize) {
         self.cx_count += 1;
-        Ok(())
     }
 
-    fn cz(&mut self, _ctl: usize, _q: usize) -> Result<(), String> {
+    fn cz(&mut self, _ctl: usize, _q: usize) {
         self.cx_count += 1;
-        Ok(())
     }
 
-    fn h(&mut self, _q: usize) -> Result<(), String> {
-        Ok(())
+    fn h(&mut self, _q: usize) {}
+
+    fn m(&mut self, _q: usize) -> Self::ResultType {
+        false
     }
 
-    fn m(&mut self, _q: usize) -> Result<BackendResult, String> {
-        Ok(BackendResult::Val(false))
+    fn mresetz(&mut self, _q: usize) -> Self::ResultType {
+        false
     }
 
-    fn mresetz(&mut self, _q: usize) -> Result<BackendResult, String> {
-        Ok(BackendResult::Val(false))
-    }
+    fn reset(&mut self, _q: usize) {}
 
-    fn reset(&mut self, _q: usize) -> Result<(), String> {
-        Ok(())
-    }
+    fn sadj(&mut self, _q: usize) {}
 
-    fn sadj(&mut self, _q: usize) -> Result<(), String> {
-        Ok(())
-    }
+    fn s(&mut self, _q: usize) {}
 
-    fn s(&mut self, _q: usize) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn swap(&mut self, _q0: usize, _q1: usize) -> Result<(), String> {
+    fn swap(&mut self, _q0: usize, _q1: usize) {
         self.cx_count += 3;
-        Ok(())
     }
 
-    fn x(&mut self, _q: usize) -> Result<(), String> {
-        Ok(())
-    }
+    fn x(&mut self, _q: usize) {}
 
-    fn y(&mut self, _q: usize) -> Result<(), String> {
-        Ok(())
-    }
+    fn y(&mut self, _q: usize) {}
 
-    fn z(&mut self, _q: usize) -> Result<(), String> {
-        Ok(())
-    }
+    fn z(&mut self, _q: usize) {}
 
-    fn qubit_allocate(&mut self) -> Result<usize, String> {
-        Ok(if let Some(qubit) = self.free_list.pop() {
+    fn qubit_allocate(&mut self) -> usize {
+        if let Some(qubit) = self.free_list.pop() {
             qubit
         } else {
             let qubit = self.qubit_count;
             self.qubit_count += 1;
             qubit.to_usize().expect("qubit is too large")
-        })
+        }
     }
 
-    fn qubit_release(&mut self, q: usize) -> Result<bool, String> {
+    fn qubit_release(&mut self, q: usize) -> bool {
         self.free_list.push(q);
-        Ok(true)
+        true
     }
 
-    fn capture_quantum_state(&mut self) -> Result<(Vec<(BigUint, Complex<f64>)>, usize), String> {
-        Ok((vec![], 0))
+    fn capture_quantum_state(&mut self) -> (Vec<(BigUint, Complex<f64>)>, usize) {
+        (vec![], 0)
     }
 
-    fn qubit_is_zero(&mut self, _q: usize) -> Result<bool, String> {
-        Ok(true)
+    fn qubit_is_zero(&mut self, _q: usize) -> bool {
+        true
     }
 }
 
@@ -231,24 +212,24 @@ mod tests {
     fn backend_gate_costs_match_readme_table() {
         let mut counts = LogicalCounts::default();
 
-        let q0 = counts.qubit_allocate().expect("should allocate");
-        let q1 = counts.qubit_allocate().expect("should allocate");
-        let q2 = counts.qubit_allocate().expect("should allocate");
+        let q0 = counts.qubit_allocate();
+        let q1 = counts.qubit_allocate();
+        let q2 = counts.qubit_allocate();
 
-        counts.ccx(q0, q1, q2).expect("should apply");
-        counts.cx(q0, q1).expect("should apply");
-        counts.cy(q0, q1).expect("should apply");
-        counts.cz(q0, q1).expect("should apply");
-        counts.swap(q0, q1).expect("should apply");
-        counts.x(q0).expect("should apply");
-        counts.y(q0).expect("should apply");
-        counts.z(q0).expect("should apply");
-        counts.h(q0).expect("should apply");
-        counts.sadj(q0).expect("should apply");
-        counts.s(q0).expect("should apply");
-        let _ = counts.m(q0).expect("should apply");
-        let _ = counts.mresetz(q0).expect("should apply");
-        counts.reset(q0).expect("should apply");
+        counts.ccx(q0, q1, q2);
+        counts.cx(q0, q1);
+        counts.cy(q0, q1);
+        counts.cz(q0, q1);
+        counts.swap(q0, q1);
+        counts.x(q0);
+        counts.y(q0);
+        counts.z(q0);
+        counts.h(q0);
+        counts.sadj(q0);
+        counts.s(q0);
+        let _ = counts.m(q0);
+        let _ = counts.mresetz(q0);
+        counts.reset(q0);
 
         assert_eq!(counts.qubit_count, 3);
         assert_eq!(counts.ccx_count, 1);
@@ -259,9 +240,9 @@ mod tests {
     #[test]
     fn qubit_allocate_reuses_released_qubits() {
         let mut counts = LogicalCounts::default();
-        let q0 = counts.qubit_allocate().expect("should allocate");
-        counts.qubit_release(q0).expect("should release");
-        let q1 = counts.qubit_allocate().expect("should allocate");
+        let q0 = counts.qubit_allocate();
+        counts.qubit_release(q0);
+        let q1 = counts.qubit_allocate();
 
         assert_eq!(q0, q1);
         assert_eq!(counts.qubit_count, 1);

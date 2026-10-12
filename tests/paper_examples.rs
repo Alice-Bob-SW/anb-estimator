@@ -47,7 +47,7 @@ fn gate_counts_formula() {
     assert_eq!(ccx_count, 324_359_510);
 }
 
-fn estimate(count: LogicalCounts, budget: ErrorBudget) -> EstimatesReport {
+fn estimate(count: LogicalCounts, budget: &ErrorBudget) -> EstimatesReport {
     let estimation = PhysicalResourceEstimation::new(
         RepetitionCode::new(),
         Rc::new(CatQubit::new()),
@@ -55,7 +55,7 @@ fn estimate(count: LogicalCounts, budget: ErrorBudget) -> EstimatesReport {
         Rc::new(count),
     );
     let result: AliceAndBobEstimates = estimation
-        .estimate(&budget)
+        .estimate(budget)
         .expect("estimation should succeed")
         .into();
     EstimatesReport::from(&result)
@@ -71,7 +71,7 @@ fn estimate(count: LogicalCounts, budget: ErrorBudget) -> EstimatesReport {
 /// main/factory boundary as `d_min*(d_min-1)`; this crate sizes it to the
 /// larger of the two distances instead. Matches the paper's runtime (7h,
 /// 9h expected) within 10%.
-#[allow(clippy::similar_names)]
+#[allow(clippy::similar_names, clippy::float_cmp)]
 fn ecdlp_256_bit_matches_paper_at_its_own_parameters() {
     let (qubit_count, cx_count, ccx_count) = ecdlp_counts(256, 18);
     let count = LogicalCounts::new(qubit_count, cx_count, ccx_count);
@@ -88,8 +88,8 @@ fn ecdlp_256_bit_matches_paper_at_its_own_parameters() {
     let report = EstimatesReport::from(&result);
 
     assert_eq!(report.physical_qubits, 126_260); // 126,133 in paper
-    assert_eq!(report.runtime_hours, 7.573722061388889); // 7h in paper
-    assert_eq!(report.total_error, 0.15900410163750558); // not in paper, just for regression test
+    assert_eq!(report.runtime_hours, 7.573_722_061_388_889); // 7h in paper
+    assert_eq!(report.total_error, 0.159_004_101_637_505_58); // not in paper, just for regression test
     let expected_runtime_hours = report.runtime_hours / (1.0 - report.total_error);
     assert_close(expected_runtime_hours, 9.0, 0.01);
 }
@@ -102,7 +102,7 @@ fn ripple_carry_adder_from_qsharp_is_stable() {
     let filename = format!("{}/qsharp/Adder.qs", env!("CARGO_MANIFEST_DIR"));
     let count = LogicalCounts::from_qsharp(filename).expect("should read Q# file");
     let budget = ErrorBudget::new(0.001 * 0.5, 0.001 * 0.5, 0.0);
-    let report = estimate(count, budget);
+    let report = estimate(count, &budget);
 
     assert_eq!(report.physical_qubits, 13_427);
     assert_eq!(report.code_distance, 9);

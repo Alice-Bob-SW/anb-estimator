@@ -15,9 +15,9 @@ rust = "==1.85.0" # Debian stable (trixie) version
 [tasks]
 fmt = "cargo fmt"
 fmt-check = "cargo fmt --check"
-check = "cargo check"
-clippy = "cargo clippy -- -D warnings"
-test = "cargo test"
+check = "cargo check --all-targets --all-features"
+clippy = "cargo clippy --all-targets --all-features -- -D warnings"
+test = "cargo test --all-features"
 
 [feature.dev.dependencies]
 ruff = "==0.16.7"
