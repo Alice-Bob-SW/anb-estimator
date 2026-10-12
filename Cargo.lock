@@ -30,6 +30,7 @@ dependencies = [
  "num-format",
  "num-traits",
  "pyo3",
+ "pyo3-build-config",
  "qsc",
  "resource_estimator",
  "serde",
