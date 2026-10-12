@@ -2,6 +2,7 @@
 name = "anb-estimator"
 version = "0.3.2"
 edition = "2024"
+rust-version = "1.85" # Debian stable (trixie) version
 description = "A resource estimator for running quantum algorithms on Alice and Bob's hardware."
 license = "MIT"
 readme = "README.md"
@@ -33,8 +34,8 @@ serde_json = { version = "1.0.151", optional = true }
 num-bigint = "0.4"
 num-complex = "0.4.6"
 num-traits = "0.2.19"
-qsc = { git = "https://github.com/microsoft/qdk.git", tag = "v1.32.0" }
-resource_estimator = { git = "https://github.com/microsoft/qdk.git", tag = "v1.32.0" }
+qsc = { git = "https://github.com/microsoft/qdk.git", tag = "v1.19.0" }
+resource_estimator = { git = "https://github.com/microsoft/qdk.git", tag = "v1.19.0" }
 num-format = "0.4.4"
 
 
