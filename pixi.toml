@@ -10,7 +10,7 @@ graphviz = ">=14.1.2"
 python = ">=3.11,<3.12"
 maturin = ">=1.13.3,<2"
 numba = ">=0.63.1"
-rust = ">=1.98.0"
+rust = "==1.85.0" # Debian stable (trixie) version
 
 [tasks]
 fmt = "cargo fmt"
