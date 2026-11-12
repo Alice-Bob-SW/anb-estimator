@@ -12,8 +12,8 @@ use num_traits::ToPrimitive;
 #[cfg(feature = "python")]
 use pyo3::pyclass;
 use resource_estimator::estimates::{
-    self, ErrorBudget, Factory, FactoryPart, LogicalPatch, PhysicalResourceEstimation,
-    PhysicalResourceEstimationResult, RealizedOverhead,
+    self, ErrorBudget, ErrorCorrection, Factory, FactoryPart, LogicalPatch, Overhead,
+    PhysicalResourceEstimation, PhysicalResourceEstimationResult, RealizedOverhead,
 };
 
 use crate::{
@@ -140,6 +140,251 @@ impl AliceAndBobEstimates {
         )?
         .into())
     }
+}
+
+/// Error returned by [`estimate_resources`] and [`estimate_frontier`].
+#[derive(Debug)]
+pub enum EstimationError {
+    /// The underlying resource estimator failed.
+    Estimator(estimates::Error),
+    /// No estimate fits within the physical qubit cap.
+    MaxPhysicalQubitsTooSmall {
+        /// Requested cap.
+        max_physical_qubits: u64,
+        /// Physical qubit count of the smallest estimate found, if any.
+        min_physical_qubits: Option<u64>,
+    },
+}
+
+impl std::fmt::Display for EstimationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Estimator(e) => write!(f, "{e}"),
+            Self::MaxPhysicalQubitsTooSmall {
+                max_physical_qubits,
+                min_physical_qubits: Some(min),
+            } => write!(
+                f,
+                "max physical qubits {max_physical_qubits} is too small: \
+                 the smallest estimate needs {min} physical qubits"
+            ),
+            Self::MaxPhysicalQubitsTooSmall {
+                max_physical_qubits,
+                min_physical_qubits: None,
+            } => write!(
+                f,
+                "max physical qubits {max_physical_qubits} is too small: no estimate found"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for EstimationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Estimator(e) => Some(e),
+            Self::MaxPhysicalQubitsTooSmall { .. } => None,
+        }
+    }
+}
+
+impl From<estimates::Error> for EstimationError {
+    fn from(e: estimates::Error) -> Self {
+        Self::Estimator(e)
+    }
+}
+
+fn new_estimation(
+    count: LogicalCounts,
+) -> PhysicalResourceEstimation<RepetitionCode, ToffoliBuilder, LogicalCounts> {
+    PhysicalResourceEstimation::new(
+        RepetitionCode::new(),
+        Rc::new(CatQubit::new()),
+        ToffoliBuilder::default(),
+        Rc::new(count),
+    )
+}
+
+/// Estimates the physical resources for `count` within `budget`.
+///
+/// Without `max_physical_qubits`, returns the estimate chosen by the
+/// underlying resource estimator. With `max_physical_qubits`, returns the
+/// fastest estimate of [`estimate_frontier`] under the same cap. This
+/// estimate can use more qubits than the one without a cap, even when the cap
+/// is larger than both.
+///
+/// # Errors
+/// Same as [`estimate_frontier`].
+pub fn estimate_resources(
+    count: LogicalCounts,
+    budget: &ErrorBudget,
+    max_physical_qubits: Option<u64>,
+) -> Result<AliceAndBobEstimates, EstimationError> {
+    if max_physical_qubits.is_none() {
+        return Ok(new_estimation(count).estimate(budget)?.into());
+    }
+    let mut frontier = estimate_frontier(count, budget, max_physical_qubits)?;
+    let fastest = fastest_index(&frontier).expect("frontier is not empty");
+    Ok(frontier.swap_remove(fastest))
+}
+
+/// Builds the Pareto frontier of estimates for `count` within `budget`,
+/// sorted by decreasing number of physical qubits.
+///
+/// Without `max_physical_qubits`, returns the frontier of the underlying
+/// resource estimator. That frontier is Pareto-optimal for the qubit count of
+/// the underlying estimator, which excludes the routing qubits added by
+/// [`AliceAndBobEstimates::physical_qubits`].
+///
+/// With `max_physical_qubits`, searches all code parameters, factories and
+/// factory counts, and keeps the Pareto-optimal estimates whose
+/// [`AliceAndBobEstimates::physical_qubits`] is at most the cap.
+///
+/// # Errors
+/// - [`EstimationError::Estimator`] if the underlying estimator fails.
+/// - [`EstimationError::MaxPhysicalQubitsTooSmall`] if no estimate fits
+///   within `max_physical_qubits`.
+pub fn estimate_frontier(
+    count: LogicalCounts,
+    budget: &ErrorBudget,
+    max_physical_qubits: Option<u64>,
+) -> Result<Vec<AliceAndBobEstimates>, EstimationError> {
+    let Some(max_physical_qubits) = max_physical_qubits else {
+        return Ok(new_estimation(count)
+            .build_frontier(budget)?
+            .into_iter()
+            .map(Into::into)
+            .collect());
+    };
+
+    let frontier = search_frontier(&count, budget, max_physical_qubits)?;
+    if frontier.is_empty() {
+        let min_physical_qubits = search_frontier(&count, budget, u64::MAX)?
+            .iter()
+            .map(AliceAndBobEstimates::physical_qubits)
+            .min();
+        return Err(EstimationError::MaxPhysicalQubitsTooSmall {
+            max_physical_qubits,
+            min_physical_qubits,
+        });
+    }
+    Ok(frontier)
+}
+
+/// Searches all code parameters, factories and factory counts, and returns
+/// the Pareto-optimal estimates with at most `max_physical_qubits` qubits,
+/// sorted by decreasing number of physical qubits.
+///
+/// An estimate is valid if it meets both the logical error budget and the
+/// magic state error budget. Among estimates with the same qubit count and
+/// runtime, the first one in search order is kept, that is the one with the
+/// smallest code parameter and the smallest factory index.
+fn search_frontier(
+    count: &LogicalCounts,
+    budget: &ErrorBudget,
+    max_physical_qubits: u64,
+) -> Result<Vec<AliceAndBobEstimates>, estimates::Error> {
+    let num_magic_states = count
+        .num_magic_states(budget, 0)
+        .map_err(estimates::Error::NumberOfMagicStatesComputationFailed)?;
+    if num_magic_states == 0 {
+        return Ok(new_estimation(count.clone())
+            .build_frontier(budget)?
+            .into_iter()
+            .map(AliceAndBobEstimates::from)
+            .filter(|e| e.physical_qubits() <= max_physical_qubits)
+            .collect());
+    }
+    let logical_qubits = count
+        .logical_qubits()
+        .map_err(estimates::Error::AlgorithmicLogicalQubitsComputationFailed)?
+        .to_f64()
+        .expect("can't convert logical qubits as f64");
+    let min_cycles = count
+        .logical_depth(budget)
+        .map_err(estimates::Error::AlgorithmicLogicalDepthComputationFailed)?;
+    let magic_states_f64 = num_magic_states
+        .to_f64()
+        .expect("can't convert number of magic states as f64");
+
+    let qec = RepetitionCode::new();
+    let qubit = Rc::new(CatQubit::new());
+    let builder = ToffoliBuilder::default();
+
+    // (physical qubits, runtime, code parameter, factory index, factory count)
+    let mut points = Vec::new();
+    for code_parameter in qec.code_parameter_range(None) {
+        let patch = LogicalPatch::new(&qec, code_parameter.clone(), qubit.clone())?;
+        let logical_error_per_cycle = logical_qubits * patch.logical_error_rate();
+        let cycles_error =
+            |cycles: u64| cycles.to_f64().expect("can't convert cycles") * logical_error_per_cycle;
+        if cycles_error(min_cycles) > budget.logical() {
+            continue;
+        }
+        for (factory_index, factory) in builder.factories().iter().enumerate() {
+            if magic_states_f64 * factory.error_probability() > budget.magic_states() {
+                continue;
+            }
+            // More factories add qubits and never add cycles. Only factory
+            // counts that reduce the number of factory runs can be faster.
+            let states_per_factory = factory.num_output_states();
+            let mut num_factories = 1;
+            loop {
+                let estimate = AliceAndBobEstimates::from_fixed_parameters(
+                    count.clone(),
+                    code_parameter.clone(),
+                    factory.clone(),
+                    num_factories,
+                )?;
+                if estimate.physical_qubits() > max_physical_qubits {
+                    break;
+                }
+                if cycles_error(estimate.num_cycles()) <= budget.logical() {
+                    points.push((
+                        estimate.physical_qubits(),
+                        estimate.runtime(),
+                        code_parameter.clone(),
+                        factory_index,
+                        num_factories,
+                    ));
+                }
+                let runs = num_magic_states.div_ceil(num_factories * states_per_factory);
+                if runs <= 1 || estimate.num_cycles() <= min_cycles {
+                    break;
+                }
+                // Smallest factory count with at most `runs - 1` runs.
+                num_factories = num_magic_states.div_ceil((runs - 1) * states_per_factory);
+            }
+        }
+    }
+
+    // Stable sort, so ties keep the search order.
+    points.sort_by_key(|&(qubits, runtime, ..)| (qubits, runtime));
+    let mut frontier = Vec::new();
+    let mut best_runtime = u64::MAX;
+    for (_, runtime, code_parameter, factory_index, num_factories) in points {
+        if runtime < best_runtime {
+            best_runtime = runtime;
+            frontier.push(AliceAndBobEstimates::from_fixed_parameters(
+                count.clone(),
+                code_parameter,
+                builder.factories()[factory_index].clone(),
+                num_factories,
+            )?);
+        }
+    }
+    frontier.reverse();
+    Ok(frontier)
+}
+
+/// Returns the index of the fastest estimate. Ties go to the estimate with
+/// fewer physical qubits.
+pub(crate) fn fastest_index(estimates: &[AliceAndBobEstimates]) -> Option<usize> {
+    estimates
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, e)| (e.runtime(), e.physical_qubits()))
+        .map(|(i, _)| i)
 }
 
 impl Deref for AliceAndBobEstimates {

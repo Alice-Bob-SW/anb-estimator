@@ -6,14 +6,13 @@
 
 use num_traits::FromPrimitive;
 use pyo3::prelude::*; // brings Python, PyResult, PyModule, Bound, etc.
-use std::rc::Rc;
 
+use crate::estimates::fastest_index;
 use crate::estimates::make_budget;
 use crate::{
-    AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts as InternalLogicalCounts,
-    RepetitionCode, ToffoliBuilder,
+    EstimatesReport, EstimationError, LogicalCounts as InternalLogicalCounts, estimate_frontier,
+    estimate_resources,
 };
-use resource_estimator::estimates::PhysicalResourceEstimation;
 
 /// Python-visible logical counts, either extracted from a Q# program or built
 /// directly by a Python caller.
@@ -113,6 +112,56 @@ impl FullResults {
     }
 }
 
+impl From<EstimationError> for PyErr {
+    fn from(e: EstimationError) -> Self {
+        match e {
+            EstimationError::MaxPhysicalQubitsTooSmall { .. } => {
+                pyo3::exceptions::PyValueError::new_err(e.to_string())
+            }
+            EstimationError::Estimator(_) => {
+                pyo3::exceptions::PyRuntimeError::new_err(e.to_string())
+            }
+        }
+    }
+}
+
+/// Runs the estimation shared by [`_estimate_qsharp_file`] and
+/// [`_estimate_logical_counts`].
+fn estimate(
+    counts: InternalLogicalCounts,
+    frontier: bool,
+    error_total: Option<f64>,
+    error_budget: Option<(f64, f64, f64)>,
+    max_physical_qubits: Option<u64>,
+) -> PyResult<FullResults> {
+    let budget = make_budget(error_total, error_budget)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let counts_py = LogicalCounts::from(&counts);
+
+    let (estimates, frontier) = if frontier {
+        let frontier = estimate_frontier(counts.clone(), &budget, max_physical_qubits)?;
+        let estimates = if max_physical_qubits.is_some() {
+            let fastest = fastest_index(&frontier).expect("frontier is not empty");
+            EstimatesReport::from(&frontier[fastest])
+        } else {
+            EstimatesReport::from(&estimate_resources(counts, &budget, None)?)
+        };
+        (
+            estimates,
+            Some(frontier.iter().map(EstimatesReport::from).collect()),
+        )
+    } else {
+        let estimates = estimate_resources(counts, &budget, max_physical_qubits)?;
+        (EstimatesReport::from(&estimates), None)
+    };
+
+    Ok(FullResults {
+        estimates,
+        frontier,
+        counts: counts_py,
+    })
+}
+
 /// Estimate resources from a Q# file and return both the best estimate and, optionally,
 /// a frontier of Pareto-optimal trade-offs, together with the parsed logical counts.
 ///
@@ -121,69 +170,32 @@ impl FullResults {
 /// - `frontier` — If `true`, also compute a frontier of estimates (e.g., different distances/α).
 /// - `error_total` — argument of make_budget ; mutually exclusive with `error_budget`.
 /// - `error_budget` — argument of make_budget ; mutually exclusive with `error_total`.
+/// - `max_physical_qubits` — If set, select the fastest estimate within this
+///   number of physical qubits. The frontier then comes from a full search
+///   and only has estimates that fit.
 ///
 /// # Errors
 /// - I/O or parsing failures when loading the Q# file,
-/// - Failures during resource estimation.
-///
+/// - Failures during resource estimation,
+/// - `ValueError` if no estimate fits within `max_physical_qubits`.
 #[pyfunction]
+#[pyo3(signature = (filename, frontier, error_total, error_budget, max_physical_qubits=None))]
 fn _estimate_qsharp_file(
     filename: &str,
     frontier: bool,
     error_total: Option<f64>,
     error_budget: Option<(f64, f64, f64)>,
+    max_physical_qubits: Option<u64>,
 ) -> PyResult<FullResults> {
-    // Build the estimation
-    let qubit = CatQubit::new();
-    let qec = RepetitionCode::new();
-    let builder = ToffoliBuilder::default();
-    let budget = make_budget(error_total, error_budget)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-
-    // Put counts behind an Rc so we can both pass it into PRE and also derive a Python view
-    let counts = Rc::new(
-        InternalLogicalCounts::from_qsharp(filename)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.clone()))?,
-    );
-    let counts_py = LogicalCounts::from(counts.as_ref());
-
-    let estimation = PhysicalResourceEstimation::new(
-        qec,
-        Rc::new(qubit),
-        builder,
-        counts.clone(), // share with PRE
-    );
-
-    // Single best estimate
-    let single_est: AliceAndBobEstimates = estimation
-        .estimate(&budget)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?
-        .into();
-    let single_report = EstimatesReport::from(&single_est);
-
-    // Optional frontier
-    let frontier_report = if frontier {
-        let results = estimation
-            .build_frontier(&budget)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        Some(
-            results
-                .into_iter()
-                .map(|r| {
-                    let est: AliceAndBobEstimates = r.into();
-                    EstimatesReport::from(&est)
-                })
-                .collect(),
-        )
-    } else {
-        None
-    };
-
-    Ok(FullResults {
-        estimates: single_report,
-        frontier: frontier_report,
-        counts: counts_py,
-    })
+    let counts = InternalLogicalCounts::from_qsharp(filename)
+        .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+    estimate(
+        counts,
+        frontier,
+        error_total,
+        error_budget,
+        max_physical_qubits,
+    )
 }
 
 /// Estimate resources from explicit logical counts and return typed results,
@@ -196,60 +208,31 @@ fn _estimate_qsharp_file(
 /// - `frontier` — If `true`, compute and return the frontier as structured objects.
 /// - `error_total` — argument of make_budget ; mutually exclusive with `error_budget`.
 /// - `error_budget` — argument of make_budget ; mutually exclusive with `error_total`.
+/// - `max_physical_qubits` — If set, select the fastest estimate within this
+///   number of physical qubits. The frontier then comes from a full search
+///   and only has estimates that fit.
 ///
 /// # Errors
-/// Propagates errors from the physical resource estimator.
+/// - Failures during resource estimation,
+/// - `ValueError` if no estimate fits within `max_physical_qubits`.
 #[pyfunction]
+#[pyo3(signature = (qubits, cx, ccx, frontier, error_total, error_budget, max_physical_qubits=None))]
 fn _estimate_logical_counts(
-    // TODO: remove duplication between here and main.rs.
     qubits: u64,
     cx: u64,
     ccx: u64,
     frontier: bool,
     error_total: Option<f64>,
     error_budget: Option<(f64, f64, f64)>,
+    max_physical_qubits: Option<u64>,
 ) -> PyResult<FullResults> {
-    // Build the estimation
-    let qubit = CatQubit::new();
-    let qec = RepetitionCode::new();
-    let builder = ToffoliBuilder::default();
-    let budget = make_budget(error_total, error_budget)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-
-    let counts = InternalLogicalCounts::new(qubits, cx, ccx);
-    let counts_py = LogicalCounts::from(&counts);
-    let estimation = PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(counts));
-
-    // Single best estimate
-    let single_est: AliceAndBobEstimates = estimation
-        .estimate(&budget)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?
-        .into();
-    let single_report = EstimatesReport::from(&single_est);
-
-    // Optional frontier
-    let frontier_report = if frontier {
-        let results = estimation
-            .build_frontier(&budget)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        Some(
-            results
-                .into_iter()
-                .map(|r| {
-                    let est: AliceAndBobEstimates = r.into();
-                    EstimatesReport::from(&est)
-                })
-                .collect(),
-        )
-    } else {
-        None
-    };
-
-    Ok(FullResults {
-        estimates: single_report,
-        frontier: frontier_report,
-        counts: counts_py,
-    })
+    estimate(
+        InternalLogicalCounts::new(qubits, cx, ccx),
+        frontier,
+        error_total,
+        error_budget,
+        max_physical_qubits,
+    )
 }
 
 #[pymethods]

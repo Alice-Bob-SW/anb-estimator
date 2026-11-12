@@ -42,6 +42,18 @@ def _check_error_inputs(error_total: float | None, error_budget: ErrorBudget | N
             raise ValueError("error_budget entries must be between 0 and 1")
 
 
+def _check_max_physical_qubits(max_physical_qubits: int | None) -> None:
+    """
+    Ensure that `max_physical_qubits`, if set, is a positive integer.
+    """
+    if max_physical_qubits is None:
+        return
+    if isinstance(max_physical_qubits, bool) or not isinstance(max_physical_qubits, int):
+        raise TypeError("max_physical_qubits must be an integer")
+    if max_physical_qubits <= 0:
+        raise ValueError("max_physical_qubits must be > 0")
+
+
 ARBITRARY_CIRCUIT_WARN = (
     "You should have a look at the README.md for assumptions on the costs of physical gates."
 )
@@ -70,6 +82,7 @@ def estimate_logical_counts(
     frontier: bool,
     error_total: float | None = None,
     error_budget: ErrorBudget | None = None,
+    max_physical_qubits: int | None = None,
 ) -> FullResults:
     """
     Runs the estimation based on logical counts and returns the results as a FullResults dataclass.
@@ -83,9 +96,16 @@ def estimate_logical_counts(
         error_total (float): Overall error target; mutually exclusive with `error_budget`.
         error_budget (Tuple): Tuple `(Proba of >= 1 logical error, Proba of >= 1 faulty magic state distillation,
                                 Proba of >= 1 failed rotation synthesis)` for an explicit split; mutually exclusive with "error_total".
+        max_physical_qubits (int): If set, select the fastest estimate that fits within this number of
+                                physical qubits. Even a cap above the uncapped estimate can change the
+                                result, since it selects for speed. The frontier then comes from a full
+                                search and only has estimates that fit.
 
     Returns:
         FullResults: The estimation results as an FullResults dataclass.
+
+    Raises:
+        ValueError: If no estimate fits within `max_physical_qubits`.
     """
     # --- validate inputs ---
     _safe_counts = _check_logical_counts(logical_counts)
@@ -94,6 +114,7 @@ def estimate_logical_counts(
         raise TypeError("frontier must be a boolean")
 
     _check_error_inputs(error_total, error_budget)
+    _check_max_physical_qubits(max_physical_qubits)
 
     return _estimate_logical_counts(
         _safe_counts.qubit_count,
@@ -102,6 +123,7 @@ def estimate_logical_counts(
         frontier=frontier,
         error_total=error_total,
         error_budget=error_budget,
+        max_physical_qubits=max_physical_qubits,
     )
 
 
@@ -110,6 +132,7 @@ def estimate_from_qualtran(
     frontier: bool,
     error_total: float | None = None,
     error_budget: ErrorBudget | None = None,
+    max_physical_qubits: int | None = None,
 ) -> FullResults:
     """
     Runs the Qualtran estimation and returns the results as a FullResults dataclass.
@@ -120,13 +143,21 @@ def estimate_from_qualtran(
         error_total (float): Overall error target; mutually exclusive with `error_budget`.
         error_budget (Tuple): Tuple `(Proba of >= 1 logical error, Proba of >= 1 faulty magic state distillation,
                                 Proba of >= 1 failed rotation synthesis)` for an explicit split; mutually exclusive with "error_total".
+        max_physical_qubits (int): If set, select the fastest estimate that fits within this number of
+                                physical qubits. Even a cap above the uncapped estimate can change the
+                                result, since it selects for speed. The frontier then comes from a full
+                                search and only has estimates that fit.
 
     Returns:
         FullResults: The estimation results as an FullResults dataclass.
+
+    Raises:
+        ValueError: If no estimate fits within `max_physical_qubits`.
     """
     # --- validate bloq ---
     if not isinstance(bloq, Bloq):
         raise TypeError("bloq must be a qualtran Bloq")
+    _check_max_physical_qubits(max_physical_qubits)
 
     # Try resource counting early to ensure the bloq is well-formed
     try:
@@ -137,7 +168,11 @@ def estimate_from_qualtran(
     warn(ARBITRARY_CIRCUIT_WARN)
 
     return estimate_logical_counts(
-        logical_count, frontier=frontier, error_total=error_total, error_budget=error_budget
+        logical_count,
+        frontier=frontier,
+        error_total=error_total,
+        error_budget=error_budget,
+        max_physical_qubits=max_physical_qubits,
     )
 
 
@@ -146,6 +181,7 @@ def estimate_qsharp_file(
     frontier: bool,
     error_total: float | None = None,
     error_budget: ErrorBudget | None = None,
+    max_physical_qubits: int | None = None,
 ) -> FullResults:
     """
     Runs the estimation for a Q# file and returns the results as a dataclass.
@@ -156,9 +192,16 @@ def estimate_qsharp_file(
         error_total (float): Overall error target; mutually exclusive with `error_budget`.
         error_budget (Tuple): Tuple `(Proba of >= 1 logical error, Proba of >= 1 faulty magic state distillation,
                                 Proba of >= 1 failed rotation synthesis)` for an explicit split; mutually exclusive with "error_total".
+        max_physical_qubits (int): If set, select the fastest estimate that fits within this number of
+                                physical qubits. Even a cap above the uncapped estimate can change the
+                                result, since it selects for speed. The frontier then comes from a full
+                                search and only has estimates that fit.
 
     Returns:
         FullResults: The estimation results as an FullResults dataclass.
+
+    Raises:
+        ValueError: If no estimate fits within `max_physical_qubits`.
     """
     # --- validate inputs ---
     if not isinstance(file_path, str):
@@ -172,7 +215,12 @@ def estimate_qsharp_file(
     warn(ARBITRARY_CIRCUIT_WARN)
 
     _check_error_inputs(error_total, error_budget)
+    _check_max_physical_qubits(max_physical_qubits)
 
     return _estimate_qsharp_file(
-        file_path, frontier=frontier, error_total=error_total, error_budget=error_budget
+        file_path,
+        frontier=frontier,
+        error_total=error_total,
+        error_budget=error_budget,
+        max_physical_qubits=max_physical_qubits,
     )
