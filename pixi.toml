@@ -22,14 +22,16 @@ test = "cargo test --all-features"
 [feature.dev.dependencies]
 ruff = "==0.16.7"
 ty = "==0.0.81"
+pytest = ">=9.2.0,<10"
 
 [feature.dev.tasks]
-fmt-py = "ruff format anb_estimator"
-fmt-py-check = "ruff format --check anb_estimator"
-lint-py = "ruff check anb_estimator"
-typecheck = "ty check anb_estimator"
+fmt-py = "ruff format anb_estimator tests/python"
+fmt-py-check = "ruff format --check anb_estimator tests/python"
+lint-py = "ruff check anb_estimator tests/python"
+typecheck = "ty check anb_estimator tests/python"
+test-py = "pytest"
 import-check = "python -c \"import anb_estimator; from anb_estimator import estimate_logical_counts, LogicalCounts; print('anb_estimator import OK')\""
-ci = { depends-on = ["fmt-check", "check", "clippy", "fmt-py-check", "lint-py", "typecheck", "test", "import-check"] }
+ci = { depends-on = ["fmt-check", "check", "clippy", "fmt-py-check", "lint-py", "typecheck", "test", "test-py", "import-check"] }
 
 [pypi-dependencies]
 anb-estimator = { path = ".", editable = true }
