@@ -30,6 +30,11 @@ build-backend = "maturin"
 features = ["python"]
 module-name = "anb_estimator._native"
 
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+# The dash plugin comes with qualtran and triggers a deprecation warning.
+addopts = "-p no:dash"
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

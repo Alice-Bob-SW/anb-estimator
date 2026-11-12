@@ -82,6 +82,8 @@ jobs:
         run: pixi run -e dev typecheck
       - name: Import smoke test
         run: pixi run -e dev import-check
+      - name: Python tests
+        run: pixi run -e dev test-py
 
   build_wheels:
     name: Build wheel - ${{matrix.os}}
