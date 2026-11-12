@@ -231,17 +231,17 @@ pub fn estimate_resources(
 /// Builds the Pareto frontier of estimates for `count` within `budget`,
 /// sorted by decreasing number of physical qubits.
 ///
-/// Without `max_physical_qubits`, returns the frontier of the underlying
-/// resource estimator. That frontier is Pareto-optimal for the qubit count of
-/// the underlying estimator, which excludes the routing qubits added by
-/// [`AliceAndBobEstimates::physical_qubits`].
+/// Searches all code parameters, factories and factory counts. Keeps the
+/// Pareto-optimal estimates for [`AliceAndBobEstimates::physical_qubits`] and
+/// runtime. With `max_physical_qubits`, keeps only the estimates with at most
+/// that many physical qubits.
 ///
-/// With `max_physical_qubits`, searches all code parameters, factories and
-/// factory counts, and keeps the Pareto-optimal estimates whose
-/// [`AliceAndBobEstimates::physical_qubits`] is at most the cap.
+/// Each estimate has fewer physical qubits and a longer runtime than the one
+/// before it.
 ///
 /// # Errors
-/// - [`EstimationError::Estimator`] if the underlying estimator fails.
+/// - [`EstimationError::Estimator`] if the underlying estimator fails or
+///   finds no estimate.
 /// - [`EstimationError::MaxPhysicalQubitsTooSmall`] if no estimate fits
 ///   within `max_physical_qubits`.
 pub fn estimate_frontier(
@@ -249,26 +249,26 @@ pub fn estimate_frontier(
     budget: &ErrorBudget,
     max_physical_qubits: Option<u64>,
 ) -> Result<Vec<AliceAndBobEstimates>, EstimationError> {
+    let frontier = search_frontier(&count, budget, max_physical_qubits.unwrap_or(u64::MAX))?;
+    if !frontier.is_empty() {
+        return Ok(frontier);
+    }
     let Some(max_physical_qubits) = max_physical_qubits else {
+        // No valid estimate. The underlying estimator reports the reason.
         return Ok(new_estimation(count)
             .build_frontier(budget)?
             .into_iter()
             .map(Into::into)
             .collect());
     };
-
-    let frontier = search_frontier(&count, budget, max_physical_qubits)?;
-    if frontier.is_empty() {
-        let min_physical_qubits = search_frontier(&count, budget, u64::MAX)?
-            .iter()
-            .map(AliceAndBobEstimates::physical_qubits)
-            .min();
-        return Err(EstimationError::MaxPhysicalQubitsTooSmall {
-            max_physical_qubits,
-            min_physical_qubits,
-        });
-    }
-    Ok(frontier)
+    let min_physical_qubits = search_frontier(&count, budget, u64::MAX)?
+        .iter()
+        .map(AliceAndBobEstimates::physical_qubits)
+        .min();
+    Err(EstimationError::MaxPhysicalQubitsTooSmall {
+        max_physical_qubits,
+        min_physical_qubits,
+    })
 }
 
 /// Searches all code parameters, factories and factory counts, and returns
