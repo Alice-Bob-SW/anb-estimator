@@ -1,4 +1,5 @@
-[![ci](https://github.com/Alice-Bob-SW/qsharp-alice-bob-resource-estimator/actions/workflows/ci.yml/badge.svg)](https://github.com/Alice-Bob-SW/qsharp-alice-bob-resource-estimator/actions/workflows/ci.yml)
+[![ci](https://github.com/Alice-Bob-SW/anb-estimator/actions/workflows/ci.yml/badge.svg)](https://github.com/Alice-Bob-SW/anb-estimator/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/anb-estimator)](https://pypi.org/project/anb-estimator/)
 
 # Q# Resource Estimator for Alice & Bob's Architecture
 
