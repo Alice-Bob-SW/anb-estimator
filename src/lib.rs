@@ -33,6 +33,7 @@
 //!   * maximum total topological error probability
 //!   * maximum total error probability from magic states preparations
 //!   * maximum total error probability from rotations (unused)
+//! - optional maximum number of physical qubits
 //!
 //! ### Provides:
 //! - number of physical cat qubits
@@ -47,9 +48,9 @@
 
 pub use code::RepetitionCode;
 pub use counter::LogicalCounts;
-pub use estimates::AliceAndBobEstimates;
 #[cfg(any(feature = "cli", feature = "python"))]
 pub use estimates::EstimatesReport;
+pub use estimates::{AliceAndBobEstimates, EstimationError, estimate_frontier, estimate_resources};
 pub use factories::ToffoliBuilder;
 pub use qubit::CatQubit;
 

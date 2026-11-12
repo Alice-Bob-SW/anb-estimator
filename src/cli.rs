@@ -7,13 +7,10 @@
 
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
-use std::rc::Rc;
 
 use crate::estimates::make_budget;
-use crate::{
-    AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts, RepetitionCode, ToffoliBuilder,
-};
-use resource_estimator::estimates::PhysicalResourceEstimation;
+use crate::{EstimatesReport, LogicalCounts, estimate_frontier, estimate_resources};
+use resource_estimator::estimates::Overhead;
 
 /// Resource estimator for Alice & Bob's architecture (cats + repetition code).
 #[derive(Parser)]
@@ -26,6 +23,12 @@ struct Cli {
     /// Also write the computed estimate(s) as JSON to this file.
     #[arg(long, value_name = "FILE")]
     json: Option<PathBuf>,
+
+    /// Maximum number of physical qubits. Selects the fastest estimate that
+    /// fits, which can use more qubits than the estimate without this option.
+    /// Fails if no estimate fits.
+    #[arg(long, value_name = "QUBITS")]
+    max_physical_qubits: Option<u64>,
 
     #[command(flatten)]
     budget: Budget,
@@ -82,9 +85,6 @@ where
 {
     let args = Cli::parse_from(args);
 
-    let qubit = CatQubit::new();
-    let qec = RepetitionCode::new();
-    let builder = ToffoliBuilder::default();
     let budget = make_budget(
         args.budget.error_total,
         args.budget.error_budget.map(|vec| (vec[0], vec[1], vec[2])),
@@ -97,14 +97,19 @@ where
         }
         Commands::Resources { qubits, cx, ccx } => LogicalCounts::new(qubits, cx, ccx),
     };
-    let estimation = PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(count));
+    let num_magic_states = count
+        .num_magic_states(&budget, 0)
+        .map_err(anyhow::Error::msg)?;
+    if num_magic_states == 0 {
+        anyhow::bail!("The number of CCX gates must be > 0");
+    }
 
     if args.frontier {
-        let reports: Vec<EstimatesReport> = estimation
-            .build_frontier(&budget)?
-            .into_iter()
-            .map(|r| EstimatesReport::from(&AliceAndBobEstimates::from(r)))
-            .collect();
+        let reports: Vec<EstimatesReport> =
+            estimate_frontier(count, &budget, args.max_physical_qubits)?
+                .iter()
+                .map(EstimatesReport::from)
+                .collect();
         for r in &reports {
             println!("{r}");
         }
@@ -112,7 +117,7 @@ where
             std::fs::write(path, serde_json::to_string_pretty(&reports)?)?;
         }
     } else {
-        let result: AliceAndBobEstimates = estimation.estimate(&budget)?.into();
+        let result = estimate_resources(count, &budget, args.max_physical_qubits)?;
         let report = EstimatesReport::from(&result);
         println!("{report}");
         if let Some(path) = args.json {

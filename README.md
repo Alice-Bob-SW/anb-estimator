@@ -31,6 +31,7 @@ This installs the `anb-estimator` CLI and the `anb_estimator` library. No Rust t
 - `--json <file>`: also write the computed estimate(s) as JSON to `<file>` (a single object, or an array with `--frontier`).
 - `--error-budget <topological> <magic> <rotation>`: detailed error split into 3 components.
 - `--error-total <value>`: overall error budget, equivalent to `--error-budget <value>/2 <value>/2 0`. Default `0.333`.
+- `--max-physical-qubits <n>`: maximum number of physical qubits, for example the size of a target machine. The estimate is the fastest one that fits, so it can use more qubits than the estimate without this option. With `--frontier`, the frontier only has points that fit. It comes from a full search that counts routing qubits, so it can differ from the frontier without this option. Fails if no estimate fits.
 
 Use either `--error-total` or `--error-budget`, not both.
 
@@ -38,6 +39,7 @@ Use either `--error-total` or `--error-budget`, not both.
 - `anb-estimator resources 40 10 10`
 - `anb-estimator --frontier file qsharp/Adder.qs`
 - `anb-estimator --json estimate.json resources 40 10 10`
+- `anb-estimator --max-physical-qubits 1300 resources 40 10000 10000`
 
 ### Library
 
@@ -46,6 +48,8 @@ from anb_estimator import estimate_logical_counts, estimate_qsharp_file, estimat
 ```
 
 `estimate_from_qualtran` takes a Qualtran `Bloq`, `estimate_qsharp_file` a Q# file, and `estimate_logical_counts` explicit `(qubits, cx, ccx)`. See [Program description](#program-description) for details on these three input forms.
+
+All three take an optional `max_physical_qubits`, with the same behavior as the CLI option. They raise `ValueError` if no estimate fits.
 
 ## Rust crate
 
@@ -74,6 +78,7 @@ The program takes as input
 	- `qubits` is the number of logical qubits,
 	- `cx` and `ccx` are the numbers of expensive logical gates involved.
 - an "error budget" in the sense of [arXiv:2311.05801](https://arxiv.org/abs/2311.05801), which represents the maximal logical error rates allowed for the target algorithm
+- optionally, a maximum number of physical qubits
 
 Based on these, the purpose of the program is to predict the physical resource preparation conditions under which the target algorithm may eventually be executed on Alice & Bob’s proprietary architecture with an error rate consistent with the desired tolerance.
 
