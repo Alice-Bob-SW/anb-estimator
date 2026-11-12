@@ -100,13 +100,13 @@ fn cap_too_small_reports_minimum() {
 }
 
 #[test]
-/// The underlying estimator's frontier ignores routing qubits. Here its
-/// smallest estimate has 1785 physical qubits (d=9, 4 factories), while
-/// d=11 with 1 factory fits in 1748.
-fn cap_finds_estimates_outside_underlying_frontier() {
+/// The underlying estimator ignores routing qubits. Its smallest estimate
+/// here has 1785 physical qubits (d=9, 4 factories), while d=11 with 1
+/// factory fits in 1748.
+fn frontier_finds_estimates_outside_underlying_frontier() {
     let counts = LogicalCounts::new(40, 10_000, 10_000);
     let frontier = estimate_frontier(counts.clone(), &budget(), None).expect("should build");
-    assert_eq!(min_physical_qubits(&frontier), 1785);
+    assert_eq!(min_physical_qubits(&frontier), 1748);
 
     let estimate = estimate_resources(counts, &budget(), Some(1784)).expect("should fit");
     assert_eq!(estimate.physical_qubits(), 1748);
@@ -132,4 +132,21 @@ fn cap_with_single_magic_state_terminates() {
         1,
     );
     assert!(min <= estimate.physical_qubits());
+}
+
+#[test]
+/// Each frontier point must be strictly better than the next one in one
+/// coordinate and strictly worse in the other. In the adder, one factory run
+/// lasts longer than the algorithm.
+fn uncapped_frontier_is_strictly_monotonic() {
+    let adder = format!("{}/qsharp/Adder.qs", env!("CARGO_MANIFEST_DIR"));
+    let adder = LogicalCounts::from_qsharp(adder).expect("should read Q# file");
+    for counts in [counts(), LogicalCounts::new(40, 10_000, 10_000), adder] {
+        let frontier = estimate_frontier(counts, &budget(), None).expect("should build");
+        assert!(frontier.len() > 1, "frontier should have several points");
+        for pair in frontier.windows(2) {
+            assert!(pair[0].physical_qubits() > pair[1].physical_qubits());
+            assert!(pair[0].runtime() < pair[1].runtime());
+        }
+    }
 }

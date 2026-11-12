@@ -98,8 +98,8 @@ def estimate_logical_counts(
                                 Proba of >= 1 failed rotation synthesis)` for an explicit split; mutually exclusive with "error_total".
         max_physical_qubits (int): If set, select the fastest estimate that fits within this number of
                                 physical qubits. Even a cap above the uncapped estimate can change the
-                                result, since it selects for speed. The frontier then comes from a full
-                                search and only has estimates that fit.
+                                result, since it selects for speed. The frontier then only has
+                                estimates that fit.
 
     Returns:
         FullResults: The estimation results as an FullResults dataclass.
@@ -145,8 +145,8 @@ def estimate_from_qualtran(
                                 Proba of >= 1 failed rotation synthesis)` for an explicit split; mutually exclusive with "error_total".
         max_physical_qubits (int): If set, select the fastest estimate that fits within this number of
                                 physical qubits. Even a cap above the uncapped estimate can change the
-                                result, since it selects for speed. The frontier then comes from a full
-                                search and only has estimates that fit.
+                                result, since it selects for speed. The frontier then only has
+                                estimates that fit.
 
     Returns:
         FullResults: The estimation results as an FullResults dataclass.
@@ -194,8 +194,8 @@ def estimate_qsharp_file(
                                 Proba of >= 1 failed rotation synthesis)` for an explicit split; mutually exclusive with "error_total".
         max_physical_qubits (int): If set, select the fastest estimate that fits within this number of
                                 physical qubits. Even a cap above the uncapped estimate can change the
-                                result, since it selects for speed. The frontier then comes from a full
-                                search and only has estimates that fit.
+                                result, since it selects for speed. The frontier then only has
+                                estimates that fit.
 
     Returns:
         FullResults: The estimation results as an FullResults dataclass.

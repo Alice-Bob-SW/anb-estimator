@@ -31,7 +31,7 @@ This installs the `anb-estimator` CLI and the `anb_estimator` library. No Rust t
 - `--json <file>`: also write the computed estimate(s) as JSON to `<file>` (a single object, or an array with `--frontier`).
 - `--error-budget <topological> <magic> <rotation>`: detailed error split into 3 components.
 - `--error-total <value>`: overall error budget, equivalent to `--error-budget <value>/2 <value>/2 0`. Default `0.333`.
-- `--max-physical-qubits <n>`: maximum number of physical qubits, for example the size of a target machine. The estimate is the fastest one that fits, so it can use more qubits than the estimate without this option. With `--frontier`, the frontier only has points that fit. It comes from a full search that counts routing qubits, so it can differ from the frontier without this option. Fails if no estimate fits.
+- `--max-physical-qubits <n>`: maximum number of physical qubits, for example the size of a target machine. The estimate is the fastest one that fits, so it can use more qubits than the estimate without this option. With `--frontier`, the frontier only has points that fit. Fails if no estimate fits.
 
 Use either `--error-total` or `--error-budget`, not both.
 

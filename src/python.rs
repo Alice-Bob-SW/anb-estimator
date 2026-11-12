@@ -171,8 +171,8 @@ fn estimate(
 /// - `error_total` — argument of make_budget ; mutually exclusive with `error_budget`.
 /// - `error_budget` — argument of make_budget ; mutually exclusive with `error_total`.
 /// - `max_physical_qubits` — If set, select the fastest estimate within this
-///   number of physical qubits. The frontier then comes from a full search
-///   and only has estimates that fit.
+///   number of physical qubits. The frontier then only has estimates that
+///   fit.
 ///
 /// # Errors
 /// - I/O or parsing failures when loading the Q# file,
@@ -209,8 +209,8 @@ fn _estimate_qsharp_file(
 /// - `error_total` — argument of make_budget ; mutually exclusive with `error_budget`.
 /// - `error_budget` — argument of make_budget ; mutually exclusive with `error_total`.
 /// - `max_physical_qubits` — If set, select the fastest estimate within this
-///   number of physical qubits. The frontier then comes from a full search
-///   and only has estimates that fit.
+///   number of physical qubits. The frontier then only has estimates that
+///   fit.
 ///
 /// # Errors
 /// - Failures during resource estimation,
