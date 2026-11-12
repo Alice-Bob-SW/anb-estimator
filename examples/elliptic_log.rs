@@ -5,12 +5,8 @@
 //! Based on É. Gouzien et al.'s article (<https://arxiv.org/abs/2302.06639>)
 //! and code (<https://github.com/ElieGouzien/elliptic_log_cat/tree/master>).
 
-use std::rc::Rc;
-
-use anb_estimator::{
-    AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts, RepetitionCode, ToffoliBuilder,
-};
-use resource_estimator::estimates::{ErrorBudget, PhysicalResourceEstimation};
+use anb_estimator::{EstimatesReport, LogicalCounts, estimate_frontier, estimate_resources};
+use resource_estimator::estimates::ErrorBudget;
 
 /// Compute logical qubits number and logical gates counts for elliptic curve
 /// discrete logarithm computation, based on <https://arxiv.org/abs/2302.06639>.
@@ -34,14 +30,10 @@ fn main() -> Result<(), anyhow::Error> {
     // Value w_e as reported in arXiv:2302.06639 (Table IV, p. 37)
     let window_size = 18;
 
-    let qubit = CatQubit::new();
-    let qec = RepetitionCode::new();
-    let builder = ToffoliBuilder::default();
     let count = elliptic_curve_crypto_count(bit_size, window_size);
     let budget = ErrorBudget::new(0.333 * 0.5, 0.333 * 0.5, 0.0);
 
-    let estimation = PhysicalResourceEstimation::new(qec, Rc::new(qubit), builder, Rc::new(count));
-    let result: AliceAndBobEstimates = estimation.estimate(&budget)?.into();
+    let result = estimate_resources(count.clone(), &budget, None)?;
     let report = EstimatesReport::from(&result);
     println!("Estimates from pre-computed logical count (elliptic curve discrete logarithm):");
     println!("{report}");
@@ -50,10 +42,8 @@ fn main() -> Result<(), anyhow::Error> {
     println!(
         "Exploration of good estimates from pre-computed logical count (elliptic curve discrete logarithm):"
     );
-    let results = estimation.build_frontier(&budget)?;
-
-    for r in results {
-        println!("{}", EstimatesReport::from(&AliceAndBobEstimates::from(r)));
+    for r in estimate_frontier(count, &budget, None)? {
+        println!("{}", EstimatesReport::from(&r));
     }
 
     Ok(())

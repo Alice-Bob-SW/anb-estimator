@@ -2,13 +2,11 @@
 //! with arXiv:2302.06639 for the two scenarios also demonstrated in
 //! `examples/elliptic_log.rs` and `examples/from_qsharp.rs`.
 
-use std::rc::Rc;
-
 use anb_estimator::{
-    AliceAndBobEstimates, CatQubit, EstimatesReport, LogicalCounts, RepetitionCode, ToffoliBuilder,
-    code::CodeParameter,
+    AliceAndBobEstimates, EstimatesReport, LogicalCounts, ToffoliBuilder, code::CodeParameter,
+    estimate_resources,
 };
-use resource_estimator::estimates::{ErrorBudget, PhysicalResourceEstimation};
+use resource_estimator::estimates::ErrorBudget;
 
 fn assert_close(actual: f64, expected: f64, relative_tolerance: f64) {
     assert!(
@@ -48,16 +46,7 @@ fn gate_counts_formula() {
 }
 
 fn estimate(count: LogicalCounts, budget: &ErrorBudget) -> EstimatesReport {
-    let estimation = PhysicalResourceEstimation::new(
-        RepetitionCode::new(),
-        Rc::new(CatQubit::new()),
-        ToffoliBuilder::default(),
-        Rc::new(count),
-    );
-    let result: AliceAndBobEstimates = estimation
-        .estimate(budget)
-        .expect("estimation should succeed")
-        .into();
+    let result = estimate_resources(count, budget, None).expect("estimation should succeed");
     EstimatesReport::from(&result)
 }
 
